@@ -27,8 +27,8 @@
     *   **Standard**: AES-256-GCM or ChaCha20-Poly1305.
     *   **PQC Cascade**: A hybrid layer combining AES-256 + ChaCha20 for defense against future quantum attacks. (Currently not working as needed. In Beta.)
     *   **2FA File Lock**: Files are encrypted using a password AND a secret answer.
-*   **🖼️ Steganography 2.0**: Hide encrypted archives inside PNG images with bit-perfect extraction logic. (Instable Beta , Not recommended to use this function)
-*   **👻 Ghost Link (SFTP)**: Securely upload sensitive data to remote servers via SSH tunnels directly from the app. (Currently in Beta)
+*   **🖼️ Steganography 2.0**: Hide encrypted archives inside PNG images with bit-perfect extraction logic.
+*   **👻 Ghost Link (SFTP)**: Securely upload sensitive data to remote servers via SSH tunnels directly from the app.
 *   **🔥 Panic Mode & Shredder**:
     *   **Duress Password**: Entering a specific "Panic Password" at login silently wipes the vault database.
     *   **DoD Shredding**: Files are overwritten 3+ times before deletion.
