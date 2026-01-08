@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛡️ NDSFC (Omega Protocol)
+# 🛡️ NDSFC
 ### Not Detectable System File Cryptographer
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
