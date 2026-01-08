@@ -116,8 +116,6 @@ This tool is designed for **educational and defensive purposes**.
 
 ---
 
----
-
 ## 🗺️ Roadmap & TO-DO
 
 We are constantly evolving NDSFC to meet military-grade standards. Here is what's coming next:
