@@ -8,14 +8,13 @@ from core.shredder import Shredder
 
 
 class CryptoEngine:
-    # Заголовки (Magic Bytes)
     MAGIC_STD = b"NDS1"
     MAGIC_2FA = b"NDS2"
-    MAGIC_PQC = b"NDSQ"  # Post-Quantum Cascade
+    MAGIC_PQC = b"NDSQ"  # PQC Int
 
     @staticmethod
     def derive_key(password: str, salt: bytes, length=32) -> bytes:
-        # Усиленный KDF для защиты от перебора
+        # Reinforced KDF 
         return scrypt(password.encode(), salt, length, N=2**15, r=8, p=1)
 
     @staticmethod
@@ -28,10 +27,10 @@ class CryptoEngine:
         salt = get_random_bytes(16)
         out_path = input_path + ".ndsfc"
 
-        # 1. Генерация ключа
+        # 1. CaptchaKey
         key = CryptoEngine.derive_key(password, salt)
 
-        # 2. Подготовка заголовка
+        # 2. Header
         header = bytearray()
         header.extend(salt)
 
@@ -44,14 +43,14 @@ class CryptoEngine:
         final_magic = b""
 
         if mode == "pqc":
-            # === QUANTUM RESISTANT CASCADE ===
-            # Слой 1: AES-256
+            # === QUANTUM RESISTANT CASCADE === ()
+            # Layer 1: AES-256
             final_magic = CryptoEngine.MAGIC_PQC
             cipher1 = AES.new(key, AES.MODE_GCM)
             temp_cipher, tag1 = cipher1.encrypt_and_digest(plaintext)
 
-            # Слой 2: ChaCha20 (на производном ключе)
-            key2 = hashlib.sha256(key).digest()  # Меняем ключ для второго слоя
+            # Layer 2: ChaCha20 (на производном ключе)
+            key2 = hashlib.sha256(key).digest()  # Changed Key for second Layer
             cipher2 = ChaCha20_Poly1305.new(key=key2)
             final_cipher, tag2 = cipher2.encrypt_and_digest(
                 temp_cipher + tag1 + cipher1.nonce
@@ -64,16 +63,16 @@ class CryptoEngine:
         elif mode == "2fa":
             # === 2FA FILE LOCK ===
             final_magic = CryptoEngine.MAGIC_2FA
-            # Хешируем ответ на вопрос
+            # Hash response
             ans_hash = hashlib.sha256(sec_a.lower().strip().encode()).digest()
-            # Шифруем AES, используя Ключ_Пароля XOR Ключ_Ответа
+            # Encryption AES, Using KeyPass XOR KeyRes
             mixed_key = bytes(a ^ b for a, b in zip(key, ans_hash))
 
             cipher = ChaCha20_Poly1305.new(key=mixed_key)
             nonce = cipher.nonce
             ciphertext, tag = cipher.encrypt_and_digest(plaintext)
 
-            # Сохраняем вопрос в открытом виде (чтобы спросить пользователя), но ответ не храним
+            # Sec.Question 
             q_bytes = sec_q.encode("utf-8")
             q_len = struct.pack(">I", len(q_bytes))
             header.extend(q_len)
@@ -86,12 +85,12 @@ class CryptoEngine:
             nonce = cipher.nonce
             ciphertext, tag = cipher.encrypt_and_digest(plaintext)
 
-        # Запись файла
+        # File Write
         with open(out_path, "wb") as f:
-            f.write(final_magic)  # 4 байта
-            f.write(header)  # Соль + доп. данные
-            f.write(nonce)  # 12 или 16 байт
-            f.write(tag)  # 16 байт
+            f.write(final_magic)  # 4 bytes
+            f.write(header)  # Salt with CSPRNG
+            f.write(nonce)  # 12 or 16 bytes
+            f.write(tag)  # 16 bytes
             f.write(ciphertext)
 
         return True, out_path
@@ -103,20 +102,16 @@ class CryptoEngine:
                 magic = f.read(4)
                 salt = f.read(16)
                 key = CryptoEngine.derive_key(password, salt)
-
-                # Логика в зависимости от Magic Bytes
                 if magic == CryptoEngine.MAGIC_PQC:
                     nonce = f.read(12)
                     tag = f.read(16)
                     ciphertext = f.read()
 
-                    # Слой 2 (снимаем ChaCha)
                     key2 = hashlib.sha256(key).digest()
                     cipher2 = ChaCha20_Poly1305.new(key=key2, nonce=nonce)
                     inner_data = cipher2.decrypt_and_verify(ciphertext, tag)
 
-                    # Разбор внутреннего слоя (AES)
-                    # Структура: [AES_CIPHER][AES_TAG:16][AES_NONCE:16]
+                    # [AES_CIPHER][AES_TAG:16][AES_NONCE:16]
                     aes_nonce = inner_data[-16:]
                     aes_tag = inner_data[-32:-16]
                     aes_cipher = inner_data[:-32]
@@ -125,9 +120,8 @@ class CryptoEngine:
                     plaintext = cipher1.decrypt_and_verify(aes_cipher, aes_tag)
 
                 elif magic == CryptoEngine.MAGIC_2FA:
-                    # Читаем длину вопроса и сам вопрос (пропускаем их, они нужны UI)
                     q_len = struct.unpack(">I", f.read(4))[0]
-                    f.read(q_len)  # Пропускаем вопрос
+                    f.read(q_len)
 
                     nonce = f.read(12)
                     tag = f.read(16)
@@ -177,3 +171,4 @@ class CryptoEngine:
             q_len = struct.unpack(">I", f.read(4))[0]
             question = f.read(q_len).decode("utf-8")
             return question
+
