@@ -20,13 +20,12 @@ class SecureSession:
     def destroy_session(self):
         """Wipes keys from RAM securely."""
         if self.master_key:
-            # Puts zeros into the memory location of the key (Best effort in Python)
-            # Python immutable bytes make this hard, but we drop the reference immediately.
             self.master_key = None
 
         self.current_vault = None
         self.is_active = False
-        # Force Garbage Collection
+
         import gc
 
         gc.collect()
+
