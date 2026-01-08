@@ -1,5 +1,5 @@
 import paramiko
-import socks  # Требуется pip install pysocks
+import socks  # Vyx , "pip install PySocks 1.7.1"
 import socket
 
 
@@ -21,14 +21,13 @@ class GhostLink:
         proxy_port=None,
     ):
         try:
-            # Настройка сокета (напрямую или через Proxy/Tor)
+            # Socket Settings. (PySocks Integration 08.01 by MXT)
             sock = None
             if proxy_host and proxy_port:
                 sock = socks.socksocket()
                 sock.set_proxy(socks.SOCKS5, proxy_host, int(proxy_port))
                 sock.connect((host, int(port)))
 
-            # Подключение
             self.client.connect(
                 hostname=host,
                 port=port,
@@ -58,3 +57,4 @@ class GhostLink:
         if self.sftp:
             self.sftp.close()
         self.client.close()
+
