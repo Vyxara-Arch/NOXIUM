@@ -39,7 +39,7 @@
 1.  **Prerequisites**: Python 3.10 or higher.
 2.  **Clone & Setup**:
     ```bash
-    git clone https://github.com/your-repo/NDSFC.git
+    git clone https://github.com/Vyxara-Arch/NDSFC.git
     cd NDSFC
     pip install -r requirements.txt
     ```
@@ -90,7 +90,7 @@ This tool is designed for **educational and defensive purposes**.
 1.  **Требования**: Python 3.10 или выше.
 2.  **Установка**:
     ```bash
-    git clone https://github.com/your-repo/NDSFC.git
+    git clone https://github.com/Vyxara-Arch/NDSFC.git
     cd NDSFC
     pip install -r requirements.txt
     ```
