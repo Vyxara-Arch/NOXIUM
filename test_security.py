@@ -31,6 +31,7 @@ def test_security():
         return False
 
     print(f"    Vault created. TOTP is saved successfully.")
+    print("    Vault created. TOTP secret generated.")
 
     # 2. Verify File Content (Should NOT have totp_secret in plaintext)
     print(f"[2] Inspecting Vault File: {path}")
