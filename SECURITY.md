@@ -8,16 +8,6 @@
 
 We take the security of NDSFC seriously. Because this software handles sensitive encryption and data destruction, we appreciate the efforts of security researchers and the community in helping us ensure its integrity.
 
-### Supported Versions
-
-Only the latest stable release and the main branch are currently supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.2.1   | :white_check_mark: |
-| 0.1.0   | :x:                |
-| < 0.3   | :x:                |
-
 ### How to Report
 
 If you believe you have found a security vulnerability in NDSFC, please **DO NOT** open a public issue. This allows us to fix the vulnerability before it can be exploited.
@@ -58,16 +48,6 @@ If you believe you have found a security vulnerability in NDSFC, please **DO NOT
 ## 🇷🇺 Сообщение об уязвимости
 
 Мы крайне серьезно относимся к безопасности NDSFC. Поскольку это ПО предназначено для защиты критических данных, мы приветствуем помощь исследователей безопасности.
-
-### Поддерживаемые версии
-
-Обновления безопасности выходят только для последней стабильной версии.
-
-| Версия  | Поддержка          |
-| ------- | ------------------ |
-| 0.2.1   | :white_check_mark: |
-| 0.1.0   | :x:                |
-| < 0.3   | :x:                |
 
 ### Процесс сообщения
 
