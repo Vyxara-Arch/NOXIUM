@@ -24,8 +24,6 @@ class VaultManager:
 
         # Используем AuthManager для генерации хешей, но сохраняем в конкретный файл
         auth = AuthManager()
-        # Временный хак: переопределяем путь БД в AuthManager или генерируем данные вручную
-        # Для чистоты архитектуры, лучше генерировать структуру здесь:
 
         from argon2 import PasswordHasher
         import pyotp
@@ -51,3 +49,4 @@ class VaultManager:
 
     def get_vault_path(self, name):
         return os.path.join(VAULT_DIR, f"{name}.json")
+
