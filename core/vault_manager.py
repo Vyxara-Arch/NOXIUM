@@ -22,7 +22,6 @@ class VaultManager:
         if os.path.exists(path):
             return False, "Vault already exists!"
 
-        # Используем AuthManager для генерации хешей, но сохраняем в конкретный файл
         auth = AuthManager()
 
         from argon2 import PasswordHasher
@@ -34,7 +33,6 @@ class VaultManager:
 
         totp_secret = pyotp.random_base32()
 
-        # Data to be encrypted
         sensitive_data = json.dumps(
             {
                 "totp_secret": totp_secret,
@@ -48,7 +46,6 @@ class VaultManager:
 
         encrypted_blob = CryptoEngine.data_encrypt(sensitive_data, password)
 
-        # Public metadata (hashes are one-way) + Encrypted Blob
         data = {
             "username": username,
             "hash": ph.hash(password),

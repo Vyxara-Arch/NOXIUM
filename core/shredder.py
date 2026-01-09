@@ -5,9 +5,7 @@ import secrets
 class Shredder:
     @staticmethod
     def wipe_file(file_path: str):
-        """
-        Overwrites file according to DoD 5220.22-M (3 passes) and deletes it.
-        """
+
         if not os.path.exists(file_path):
             return
 
@@ -20,17 +18,13 @@ class Shredder:
             os.fsync(f.fileno())
             f.seek(0)
 
-
             f.write(b"\xff" * file_size)
             f.flush()
             os.fsync(f.fileno())
             f.seek(0)
 
-
             f.write(secrets.token_bytes(file_size))
             f.flush()
             os.fsync(f.fileno())
 
-
         os.remove(file_path)
-

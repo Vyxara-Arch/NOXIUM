@@ -21,8 +21,6 @@ class CryptoEngine:
     def encrypt_advanced(input_path, password, mode, sec_q=None, sec_a=None):
         """
         mode: 'standard', 'pqc' (Quantum), '2fa'
-        sec_q: Вопрос (для 2FA)
-        sec_a: Ответ (для 2FA)
         """
         salt = get_random_bytes(16)
         out_path = input_path + ".ndsfc"

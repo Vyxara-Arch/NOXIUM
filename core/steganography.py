@@ -4,15 +4,13 @@ import os
 
 
 class StegoEngine:
-    HEADER_SIZE = 4  # 4 bytes for length
+    HEADER_SIZE = 4
 
     @staticmethod
     def get_capacity(image_path):
-        """Returns the maximum number of bytes that can be hidden in the image."""
         try:
             with Image.open(image_path) as img:
                 width, height = img.size
-                # 3 channels (RGB), 1 bit per channel = 3 bits per pixel
                 total_bits = width * height * 3
                 total_bytes = total_bits // 8
                 return total_bytes - StegoEngine.HEADER_SIZE
@@ -30,11 +28,9 @@ class StegoEngine:
         pixels = img.load()
         width, height = img.size
 
-        # Read secret data
         with open(secret_path, "rb") as f:
             data = f.read()
 
-        # Prepare payload: [Length(4 bytes)][Data]
         payload = struct.pack(">I", len(data)) + data
 
         required_bits = len(payload) * 8
@@ -57,10 +53,8 @@ class StegoEngine:
 
                 for i in range(3):
                     if data_idx < payload_len:
-                        # Get current bit from payload
                         bit = (payload[data_idx] >> (7 - bit_idx)) & 1
 
-                        # Modify LSB
                         rgb[i] = (rgb[i] & ~1) | bit
 
                         bit_idx += 1
@@ -88,7 +82,6 @@ class StegoEngine:
         pixels = img.load()
         width, height = img.size
 
-        # Generator for extracted bits
         def bit_generator():
             for y in range(height):
                 for x in range(width):
@@ -99,7 +92,6 @@ class StegoEngine:
 
         bg = bit_generator()
 
-        # 1. Read Length (32 bits)
         length_val = 0
         try:
             for _ in range(32):
@@ -107,13 +99,11 @@ class StegoEngine:
         except StopIteration:
             raise ValueError("Image too small or corrupted header")
 
-        # Sanity check on length
-        if length_val > width * height * 3 // 8:  # Rough capitalization check
+        if length_val > width * height * 3 // 8:
             raise ValueError(
                 f"Extracted length header seems corrupt: {length_val} bytes"
             )
 
-        # 2. Read Data
         data_bytes = bytearray()
         try:
             for _ in range(length_val):
