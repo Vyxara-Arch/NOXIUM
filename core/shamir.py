@@ -10,12 +10,10 @@ class ShamirVault:
 
     @staticmethod
     def combine_shares(shares_list):
-        """
-        shares_list: list of tuples (index, share_hex_string)
-        """
         formatted_shares = []
         for idx, share_hex in shares_list:
             formatted_shares.append((int(idx), unhexlify(share_hex)))
 
         return Shamir.combine(formatted_shares)
+
 
