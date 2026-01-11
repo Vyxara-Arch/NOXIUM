@@ -6,11 +6,11 @@
 
 ## 🇺🇸 Reporting a Vulnerability
 
-We take the security of NDSFC seriously. Because this software handles sensitive encryption and data destruction, we appreciate the efforts of security researchers and the community in helping us ensure its integrity.
+We take the security of NOXIUM seriously. Because this software handles sensitive encryption and data destruction, we appreciate the efforts of security researchers and the community in helping us ensure its integrity.
 
 ### How to Report
 
-If you believe you have found a security vulnerability in NDSFC, please **DO NOT** open a public issue. This allows us to fix the vulnerability before it can be exploited.
+If you believe you have found a security vulnerability in NOXIUM, please **DO NOT** open a public issue. This allows us to fix the vulnerability before it can be exploited.
 
 1.  **Email**: Send a detailed report to **[coringnight@gmail.com]**.
 2.  **Encryption (Optional but Recommended)**: If the report contains sensitive Proof-of-Concept (PoC) code, please encrypt your email using our PGP Key:
@@ -18,7 +18,7 @@ If you believe you have found a security vulnerability in NDSFC, please **DO NOT
 
 ### What to Include
 
-*   The specific version of NDSFC affected.
+*   The specific version of NOXIUM affected.
 *   Steps to reproduce the vulnerability.
 *   Proof of concept (PoC) code or screenshots.
 *   Impact assessment (e.g., Data Leak, Auth Bypass, RAM Persistence).
@@ -47,7 +47,7 @@ If you believe you have found a security vulnerability in NDSFC, please **DO NOT
 
 ## 🇷🇺 Сообщение об уязвимости
 
-Мы крайне серьезно относимся к безопасности NDSFC. Поскольку это ПО предназначено для защиты критических данных, мы приветствуем помощь исследователей безопасности.
+Мы крайне серьезно относимся к безопасности NOXIUM. Поскольку это ПО предназначено для защиты критических данных, мы приветствуем помощь исследователей безопасности.
 
 ### Процесс сообщения
 
@@ -59,7 +59,7 @@ If you believe you have found a security vulnerability in NDSFC, please **DO NOT
 
 ### Что включить в отчет
 
-*   Версия NDSFC, в которой найдена ошибка.
+*   Версия NOXIUM, в которой найдена ошибка.
 *   Пошаговая инструкция по воспроизведению.
 *   Proof of Concept (PoC) или скриншоты.
 *   Оценка влияния (например: утечка ключей, обход 2FA, остаточные данные в RAM).
