@@ -88,6 +88,7 @@ All cryptographic material exists **only in volatile RAM** and is securely wiped
 ---
 
 ### 🏗️ Project Architecture
+```
 NDSFC/
 ├── core/
 │ ├── crypto_engine.py
@@ -102,7 +103,7 @@ NDSFC/
 │ └── app_qt.py
 ├── vaults/
 └── main.py
-
+```
 ---
 
 <a name="russian"></a>
