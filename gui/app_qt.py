@@ -39,6 +39,7 @@ from PyQt6.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QGridLayout,
+    QColorDialog,
 )
 import io
 import qrcode
@@ -75,6 +76,7 @@ from core.session import SecureSession
 from core.notes_manager import NotesManager
 from core.backup_manager import BackupManager
 from core.folder_watcher import FolderWatcher
+from core.theme_manager import ThemeManager
 
 
 # Modern Glassmorphic Color Palette
@@ -1203,6 +1205,90 @@ class TaskWorker(QThread):
             self.finished.emit((False, str(e)))
 
 
+class ThemeCreatorDialog(QDialog):
+    def __init__(self, parent=None, theme_manager=None):
+        super().__init__(parent)
+        self.tm = theme_manager
+        self.setWindowTitle("Design Custom Theme")
+        self.resize(500, 400)
+        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+
+        # Name Input
+        self.in_name = QLineEdit()
+        self.in_name.setPlaceholderText("Theme Name (e.g. Neon Nights)")
+        layout.addWidget(QLabel("Theme Name:"))
+        layout.addWidget(self.in_name)
+
+        # Colors
+        self.colors = {
+            "accent": "#00e676",
+            "secondary": "#7f5af0",
+            "tertiary": "#00b4d8",
+        }
+
+        # Color Pickers
+        form = QFormLayout()
+
+        self.btn_accent = QPushButton(self.colors["accent"])
+        self.btn_accent.clicked.connect(
+            lambda: self.pick_color("accent", self.btn_accent)
+        )
+        self.style_button(self.btn_accent, self.colors["accent"])
+
+        self.btn_secondary = QPushButton(self.colors["secondary"])
+        self.btn_secondary.clicked.connect(
+            lambda: self.pick_color("secondary", self.btn_secondary)
+        )
+        self.style_button(self.btn_secondary, self.colors["secondary"])
+
+        self.btn_tertiary = QPushButton(self.colors["tertiary"])
+        self.btn_tertiary.clicked.connect(
+            lambda: self.pick_color("tertiary", self.btn_tertiary)
+        )
+        self.style_button(self.btn_tertiary, self.colors["tertiary"])
+
+        form.addRow("Primary Accent:", self.btn_accent)
+        form.addRow("Secondary Accent:", self.btn_secondary)
+        form.addRow("Tertiary Accent:", self.btn_tertiary)
+
+        layout.addLayout(form)
+
+        layout.addStretch()
+
+        # Save
+        btn_save = QPushButton("Save Theme", objectName="Primary")
+        btn_save.clicked.connect(self.save_theme)
+        layout.addWidget(btn_save)
+
+    def style_button(self, btn, color):
+        btn.setStyleSheet(
+            f"background-color: {color}; color: black; font-weight: bold; border: 2px solid white; border-radius: 5px;"
+        )
+        btn.setText(color)
+
+    def pick_color(self, key, btn):
+        c = QColorDialog.getColor(QColor(self.colors[key]), self, f"Select {key} Color")
+        if c.isValid():
+            hex_c = c.name()
+            self.colors[key] = hex_c
+            self.style_button(btn, hex_c)
+
+    def save_theme(self):
+        name = self.in_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Error", "Theme name required")
+            return
+
+        if self.tm.save_custom_theme(name, self.colors):
+            QMessageBox.information(self, "Success", f"Theme '{name}' saved!")
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", "Failed to save theme")
+
+
 class FolderWatcherDialog(QDialog):
     def __init__(self, parent=None, watcher=None):
         super().__init__(parent)
@@ -1333,6 +1419,7 @@ class NDSFC_Pro(QMainWindow):
         self.auth = AuthManager()
         self.session = SecureSession()
         self.watcher = None
+        self.theme_manager = ThemeManager()
 
         self.main_stack = FadeStack()
         self.setCentralWidget(self.main_stack)
@@ -1748,17 +1835,10 @@ class NDSFC_Pro(QMainWindow):
         self.set_shred.setSuffix(" Passes")
 
         self.set_theme = QComboBox()
-        self.set_theme.addItems(
-            [
-                "Cyber Green",
-                "Matrix Code",
-                "Cyberpunk Pink",
-                "Ocean Blue",
-                "Sunset Orange",
-                "Red Alert",
-                "Deep Purple",
-            ]
-        )
+        self.set_theme.addItems(self.theme_manager.get_all_theme_names())
+
+        btn_create = QPushButton("Design Custom Theme")
+        btn_create.clicked.connect(self.open_theme_creator)
 
         btn_save = QPushButton("Save Configuration", objectName="Primary")
         btn_save.clicked.connect(self.save_settings)
@@ -1766,6 +1846,7 @@ class NDSFC_Pro(QMainWindow):
         fl.addRow("Default Encryption:", self.set_algo)
         fl.addRow("Shredder Intensity:", self.set_shred)
         fl.addRow("UI Accent Color:", self.set_theme)
+        fl.addRow("", btn_create)
 
         btn_export = QPushButton("Backup Vault (.vib)")
         btn_export.clicked.connect(self.do_vault_export)
@@ -1985,55 +2066,28 @@ class NDSFC_Pro(QMainWindow):
         for l in AuditLog.get_logs()[-10:]:
             self.list_audit.addItem(l)
 
+    def open_theme_creator(self):
+        dlg = ThemeCreatorDialog(self, self.theme_manager)
+        if dlg.exec():
+            current = self.set_theme.currentText()
+            self.set_theme.clear()
+            names = self.theme_manager.get_all_theme_names()
+            self.set_theme.addItems(names)
+
+            # Try to select the new theme
+            new_name = dlg.in_name.text()
+            if new_name in names:
+                self.set_theme.setCurrentText(new_name)
+            else:
+                idx = self.set_theme.findText(current)
+                if idx >= 0:
+                    self.set_theme.setCurrentIndex(idx)
+
     def apply_theme(self, theme_name):
-        # Complete theme palettes
-        themes = {
-            "Cyber Green": {
-                "accent": "#00e676",
-                "secondary": "#7f5af0",
-                "tertiary": "#00b4d8",
-            },
-            "Matrix Code": {
-                "accent": "#00ff41",
-                "secondary": "#39ff14",
-                "tertiary": "#0dff00",
-            },
-            "Cyberpunk Pink": {
-                "accent": "#ff006e",
-                "secondary": "#fb5607",
-                "tertiary": "#8338ec",
-            },
-            "Ocean Blue": {
-                "accent": "#00b4d8",
-                "secondary": "#0077b6",
-                "tertiary": "#90e0ef",
-            },
-            "Sunset Orange": {
-                "accent": "#ff6b35",
-                "secondary": "#f7931e",
-                "tertiary": "#ffd23f",
-            },
-            "Red Alert": {
-                "accent": "#ff3d3d",
-                "secondary": "#ff6b6b",
-                "tertiary": "#ff8787",
-            },
-            "Deep Purple": {
-                "accent": "#7f5af0",
-                "secondary": "#9f7af0",
-                "tertiary": "#b794f6",
-            },
-        }
-
-        theme = themes.get(theme_name, themes["Cyber Green"])
-        accent = theme["accent"]
-        secondary = theme["secondary"]
-
-        # Replace colors in stylesheet
-        NEW_STYLESHEET = STYLESHEET.replace(ACCENT_COLOR, accent)
-        NEW_STYLESHEET = NEW_STYLESHEET.replace(ACCENT_SECONDARY, secondary)
-
-        self.setStyleSheet(NEW_STYLESHEET)
+        new_style = self.theme_manager.apply_theme_to_stylesheet(STYLESHEET, theme_name)
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(new_style)
 
     def save_settings(self):
         algo = self.set_algo.currentText()
