@@ -2,9 +2,8 @@
 
 <img src="assets/ndsfc_splash.png" width="720"/>
 
-# 🛡️ NDSFC v2.0  
-## The Digital Fortress  
-### *Titanium-Grade Privacy · Anti-Forensics · Post-Quantum Encryption*
+# 🛡️ NOXIUM  
+### *Anti-Forensics · Post-Quantum Encryption (PQC Based)*
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Security](https://img.shields.io/badge/Security-Zero--Persistence-critical?style=for-the-badge&logo=shield&logoColor=white)](#)
@@ -12,7 +11,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#)
 [![License](https://img.shields.io/badge/License-GPLv3-yellow?style=for-the-badge)](LICENSE)
 
-**NDSFC** is an advanced digital security suite focused on  
+**NOXIUM** is an advanced digital security suite focused on  
 **deniable encryption**, **forensic invisibility**, and **absolute data sovereignty**.
 
 Designed for hostile environments.
@@ -32,7 +31,7 @@ Designed for hostile environments.
 Encryption alone is insufficient.  
 **True security means leaving no trace.**
 
-NDSFC enforces:
+NOXIUM enforces:
 - No plaintext artifacts on disk
 - No persistent encryption keys
 - No recoverable metadata
@@ -128,5 +127,5 @@ GNU GPLv3. This software is provided AS IS. Use responsibly. Freedom requires re
 ---
 
 <div align="center">
-🔐 NDSFC — when privacy must survive anything.
+🔐 NOXIUM — Leave Nothing Behind.
 </div>
