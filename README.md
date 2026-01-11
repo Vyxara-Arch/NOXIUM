@@ -111,10 +111,11 @@ python main.py
 
 
 👥 Authors & Contributors
+```
 MintyExtremum — Core Cryptography
 Vyxara-Arch — Architecture & UI
 Blooder — Security Research & Testing
-
+```
 ---
 
 📜 License 
