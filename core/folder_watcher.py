@@ -68,17 +68,12 @@ class FolderWatcher(QObject):
 
                         path = os.path.join(folder, filename)
 
-                        # Skip directories
                         if os.path.isdir(path):
                             continue
 
-                        # Skip already encrypted files
                         if filename.endswith(".ndsfc"):
                             continue
 
-                        # Check if file has an encrypted version already?
-                        # If "doc.txt" exists and "doc.txt.ndsfc" exists, skip?
-                        # Or re-encrypt? Safer to skip to verify we don't loop or duplicate.
                         if os.path.exists(path + ".ndsfc"):
                             continue
 
@@ -90,8 +85,6 @@ class FolderWatcher(QObject):
             time.sleep(2)  # Poll interval
 
     def process_file(self, path):
-        # Wait for file to be fully written?
-        # Simple check: try to rename?
         try:
             # Encrypt
             ok, msg = self.crypto_engine.encrypt_advanced(
