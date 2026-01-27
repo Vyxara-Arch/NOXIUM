@@ -1,6 +1,8 @@
 import sys
 import os
 import time
+import qtawesome as qta
+
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -10,1421 +12,75 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QStackedWidget,
     QFrame,
     QFileDialog,
-    QProgressBar,
     QMessageBox,
     QListWidget,
-    QListWidgetItem,
     QComboBox,
     QCheckBox,
     QInputDialog,
-    QGraphicsOpacityEffect,
-    QSpinBox,
     QSpinBox,
     QFormLayout,
-    QDialog,
-    QSpinBox,
-    QFormLayout,
-    QDialog,
-    QTabWidget,
-    QTextEdit,
-    QSpinBox,
-    QFormLayout,
-    QDialog,
-    QTabWidget,
-    QTextEdit,
-    QGroupBox,
-    QRadioButton,
-    QButtonGroup,
     QGridLayout,
-    QColorDialog,
     QTableWidget,
     QTableWidgetItem,
     QAbstractItemView,
 )
-import io
-import qrcode
-import psutil  # Ensure psutil is available for direct check if needed, though tools has it.
-from core.steganography import StegoEngine
-import qrcode
-from core.steganography import StegoEngine
-from core.network import GhostLink
-from core.tools import SecurityTools
-from PyQt6.QtCore import (
-    Qt,
-    QThread,
-    pyqtSignal,
-    QPropertyAnimation,
-    QEasingCurve,
-    QSize,
-    QParallelAnimationGroup,
-    QTimer,
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
+
+from gui import styles
+from gui.widgets import SystemMonitorWidget, FadeStack
+from gui.dialogs import (
+    StartStegoDialog,
+    GhostLinkDialog,
+    PassGenDialog,
+    NotesDialog,
+    InitVaultDialog,
+    ThemeCreatorDialog,
+    FolderWatcherDialog,
+    RecoveryDialog,
 )
-from PyQt6.QtGui import QColor, QIcon
-import qtawesome as qta
+from gui.workers import TaskWorker
 
 from core.auth import AuthManager
 from core.vault_manager import VaultManager
 from core.crypto_engine import CryptoEngine
 from core.shredder import Shredder
-from core.tools import SecurityTools
 from core.audit import AuditLog
-from core.network import GhostLink
 from core.session import SecureSession
-
-
-from core.session import SecureSession
-from core.notes_manager import NotesManager
 from core.backup_manager import BackupManager
 from core.folder_watcher import FolderWatcher
 from core.theme_manager import ThemeManager
 from core.indexer import IndexManager
-
-
-# Modern Glassmorphic Color Palette
-ACCENT_COLOR = "#00e676"
-ACCENT_SECONDARY = "#7f5af0"
-ACCENT_TERTIARY = "#00b4d8"
-BG_COLOR = "#0a0a0f"
-BG_GRADIENT_START = "#0f0f1a"
-BG_GRADIENT_END = "#1a1a2e"
-CARD_COLOR = "rgba(30, 30, 45, 0.7)"
-CARD_HOVER = "rgba(40, 40, 60, 0.8)"
-GLASS_BORDER = "rgba(255, 255, 255, 0.1)"
-TEXT_COLOR = "#ffffff"
-TEXT_MUTED = "#a0a0b0"
-SHADOW_COLOR = "rgba(0, 0, 0, 0.3)"
-
-
-class SystemMonitorWidget(QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("Card")
-        self.setFixedSize(300, 160)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        l_title = QLabel("System Vitality")
-        l_title.setStyleSheet(
-            f"font-weight: 600; color: {TEXT_MUTED}; font-size: 14px;"
-        )
-        layout.addWidget(l_title)
-
-        # CPU
-        self.cpu_bar = QProgressBar()
-        self.cpu_bar.setTextVisible(False)
-        self.cpu_bar.setRange(0, 100)
-        self.cpu_bar.setFixedHeight(10)
-
-        self.lbl_cpu = QLabel("CPU: 0%")
-        self.lbl_cpu.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; color: {ACCENT_COLOR};"
-        )
-
-        layout.addWidget(self.lbl_cpu)
-        layout.addWidget(self.cpu_bar)
-        layout.addSpacing(8)
-
-        # RAM
-        self.ram_bar = QProgressBar()
-        self.ram_bar.setTextVisible(False)
-        self.ram_bar.setRange(0, 100)
-        self.ram_bar.setFixedHeight(10)
-
-        self.lbl_ram = QLabel("RAM: 0%")
-        self.lbl_ram.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; color: {ACCENT_SECONDARY};"
-        )
-
-        layout.addWidget(self.lbl_ram)
-        layout.addWidget(self.ram_bar)
-
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_stats)
-        self.timer.start(2000)
-        self.update_stats()
-
-    def update_stats(self):
-        try:
-            c = psutil.cpu_percent()
-            r = psutil.virtual_memory().percent
-            self.cpu_bar.setValue(int(c))
-            self.lbl_cpu.setText(f"CPU: {c}%")
-            self.ram_bar.setValue(int(r))
-            self.lbl_ram.setText(f"RAM: {r}%")
-        except:
-            pass
-
-
-STYLESHEET = f"""
-/* Global Styles */
-QMainWindow {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {BG_GRADIENT_START}, stop:1 {BG_GRADIENT_END});
-}}
-
-QWidget {{
-    color: {TEXT_COLOR};
-    font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif;
-    font-size: 13px;
-    font-weight: 400;
-}}
-
-/* Glassmorphic Cards */
-QFrame#Card {{
-    background: {CARD_COLOR};
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 20px;
-}}
-
-QFrame#Card:hover {{
-    background: {CARD_HOVER};
-    border: 1px solid rgba(255, 255, 255, 0.15);
-}}
-
-/* Sidebar with Glass Effect */
-QFrame#Sidebar {{
-    background: rgba(20, 20, 30, 0.85);
-    border-right: 1px solid {GLASS_BORDER};
-}}
-
-/* Modern Input Fields */
-QLineEdit, QComboBox, QSpinBox {{
-    background: rgba(30, 30, 45, 0.6);
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    padding: 12px 16px;
-    color: white;
-    font-size: 14px;
-    selection-background-color: {ACCENT_COLOR};
-}}
-
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
-    border: 2px solid {ACCENT_COLOR};
-    background: rgba(30, 30, 45, 0.8);
-}}
-
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{
-    background: rgba(40, 40, 60, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}}
-
-/* ComboBox Dropdown */
-QComboBox::drop-down {{
-    border: none;
-    width: 30px;
-}}
-
-QComboBox::down-arrow {{
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 5px solid {TEXT_MUTED};
-    margin-right: 10px;
-}}
-
-QComboBox QAbstractItemView {{
-    background: rgba(30, 30, 45, 0.95);
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    selection-background-color: {ACCENT_COLOR};
-    selection-color: black;
-    padding: 5px;
-}}
-
-/* Minimalist Buttons */
-QPushButton {{
-    background: rgba(50, 50, 70, 0.6);
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    padding: 12px 20px;
-    color: {TEXT_MUTED};
-    font-weight: 600;
-    font-size: 13px;
-    text-align: center;
-}}
-
-QPushButton:hover {{
-    background: rgba(70, 70, 90, 0.8);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}}
-
-QPushButton:pressed {{
-    background: rgba(40, 40, 60, 0.9);
-}}
-
-/* Primary Action Button */
-QPushButton#Primary {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {ACCENT_COLOR}, stop:1 #00d866);
-    color: #000000;
-    font-weight: 700;
-    border: none;
-}}
-
-QPushButton#Primary:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #00ff88, stop:1 {ACCENT_COLOR});
-}}
-
-QPushButton#Primary:pressed {{
-    background: {ACCENT_COLOR};
-}}
-
-/* Danger/Alert Button */
-QPushButton#Danger {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #ff3d3d, stop:1 #ff5555);
-    color: white;
-    font-weight: 700;
-    border: none;
-}}
-
-QPushButton#Danger:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #ff5555, stop:1 #ff3d3d);
-}}
-
-/* Secondary Button */
-QPushButton#Secondary {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {ACCENT_SECONDARY}, stop:1 #9f7af0);
-    color: white;
-    font-weight: 700;
-    border: none;
-}}
-
-QPushButton#Secondary:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #9f7af0, stop:1 {ACCENT_SECONDARY});
-}}
-
-/* Checkboxes */
-QCheckBox {{
-    color: {TEXT_COLOR};
-    spacing: 8px;
-}}
-
-QCheckBox::indicator {{
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    border: 2px solid {GLASS_BORDER};
-    background: rgba(30, 30, 45, 0.6);
-}}
-
-QCheckBox::indicator:hover {{
-    border: 2px solid {ACCENT_COLOR};
-    background: rgba(40, 40, 60, 0.7);
-}}
-
-QCheckBox::indicator:checked {{
-    background: {ACCENT_COLOR};
-    border: 2px solid {ACCENT_COLOR};
-    image: none;
-}}
-
-/* Progress Bars */
-QProgressBar {{
-    border: none;
-    background: rgba(30, 30, 45, 0.6);
-    border-radius: 8px;
-    height: 12px;
-    text-align: center;
-}}
-
-QProgressBar::chunk {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {ACCENT_COLOR}, stop:1 {ACCENT_TERTIARY});
-    border-radius: 8px;
-}}
-
-/* List Widgets */
-QListWidget {{
-    background: rgba(20, 20, 35, 0.5);
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    padding: 8px;
-    color: white;
-}}
-
-QListWidget::item {{
-    padding: 10px;
-    border-radius: 8px;
-    margin: 2px 0;
-}}
-
-QListWidget::item:hover {{
-    background: rgba(50, 50, 70, 0.6);
-}}
-
-QListWidget::item:selected {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 rgba(0, 230, 118, 0.3), stop:1 rgba(0, 180, 216, 0.3));
-    border-left: 3px solid {ACCENT_COLOR};
-}}
-
-/* Scrollbars */
-QScrollBar:vertical {{
-    background: transparent;
-    width: 10px;
-    margin: 0;
-}}
-
-QScrollBar::handle:vertical {{
-    background: rgba(100, 100, 120, 0.5);
-    border-radius: 5px;
-    min-height: 30px;
-}}
-
-QScrollBar::handle:vertical:hover {{
-    background: rgba(120, 120, 140, 0.7);
-}}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-    height: 0px;
-}}
-
-QScrollBar:horizontal {{
-    background: transparent;
-    height: 10px;
-    margin: 0;
-}}
-
-QScrollBar::handle:horizontal {{
-    background: rgba(100, 100, 120, 0.5);
-    border-radius: 5px;
-    min-width: 30px;
-}}
-
-QScrollBar::handle:horizontal:hover {{
-    background: rgba(120, 120, 140, 0.7);
-}}
-
-/* Tab Widget */
-QTabWidget::pane {{
-    border: none;
-    background: transparent;
-}}
-
-QTabBar::tab {{
-    background: rgba(30, 30, 45, 0.5);
-    color: {TEXT_MUTED};
-    padding: 12px 24px;
-    margin-right: 4px;
-    border-radius: 12px 12px 0 0;
-    font-weight: 600;
-}}
-
-QTabBar::tab:selected {{
-    background: {CARD_COLOR};
-    color: {ACCENT_COLOR};
-    border-bottom: 3px solid {ACCENT_COLOR};
-}}
-
-QTabBar::tab:hover {{
-    background: rgba(40, 40, 60, 0.7);
-    color: white;
-}}
-
-/* Tooltips */
-QToolTip {{
-    background: rgba(30, 30, 45, 0.95);
-    color: white;
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 12px;
-}}
-
-/* SpinBox */
-QSpinBox::up-button, QSpinBox::down-button {{
-    background: rgba(50, 50, 70, 0.6);
-    border: none;
-    border-radius: 6px;
-    width: 20px;
-}}
-
-QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
-    background: rgba(70, 70, 90, 0.8);
-}}
-
-/* Text Edit */
-QTextEdit {{
-    background: rgba(20, 20, 35, 0.5);
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    padding: 12px;
-    color: white;
-}}
-
-/* Group Box */
-QGroupBox {{
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    margin-top: 12px;
-    padding-top: 12px;
-    font-weight: 600;
-    color: {TEXT_COLOR};
-}}
-
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    left: 12px;
-    padding: 0 8px;
-}}
-"""
-
-
-class FadeStack(QStackedWidget):
-    """Custom Stacked Widget with Fade Animation"""
-
-    def __init__(self):
-        super().__init__()
-        self.fade_anim = None
-
-    def on_fade_finished(self):
-        self.currentWidget().setGraphicsEffect(None)
-        # The previous widget is now hidden by stacking order or can be explicitly hidden if needed,
-        # but standard QStackedWidget only shows one.
-        # Actually QStackedWidget shows only current. Custom logic here relied on show().
-        # Let's ensure we use standard behavior.
-        self.setCurrentIndex(self.next_idx)
-        self.widget(self.next_idx).setGraphicsEffect(None)
-
-    def fade_to_index(self, index):
-        if index == self.currentIndex():
-            return
-
-        self.next_idx = index
-        current_widget = self.currentWidget()
-        next_widget = self.widget(index)
-
-        if not current_widget or not next_widget:
-            self.setCurrentIndex(index)
-            return
-
-        self.eff1 = QGraphicsOpacityEffect(self)
-        self.eff2 = QGraphicsOpacityEffect(self)
-        current_widget.setGraphicsEffect(self.eff1)
-        next_widget.setGraphicsEffect(self.eff2)
-
-        next_widget.show()
-        next_widget.raise_()
-
-        self.anim_group = QParallelAnimationGroup()
-
-        anim1 = QPropertyAnimation(self.eff1, b"opacity")
-        anim1.setDuration(300)
-        anim1.setStartValue(1)
-        anim1.setEndValue(0)
-
-        anim2 = QPropertyAnimation(self.eff2, b"opacity")
-        anim2.setDuration(300)
-        anim2.setStartValue(0)
-        anim2.setEndValue(1)
-
-        self.anim_group.addAnimation(anim1)
-        self.anim_group.addAnimation(anim2)
-        self.anim_group.finished.connect(self.on_fade_finished)
-        self.anim_group.start()
-
-
-class StartStegoDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Omega Steganography Tool")
-        self.setFixedSize(600, 500)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        layout = QVBoxLayout(self)
-
-        self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(
-            "QTabWidget::pane { border: 0; } QTabBar::tab { background: #27272a; color: gray; padding: 10px; } QTabBar::tab:selected { background: #00e676; color: black; }"
-        )
-
-        self.tab_enc = self.init_enc_tab()
-        self.tab_dec = self.init_dec_tab()
-
-        self.tabs.addTab(self.tab_enc, "Hide Data")
-        self.tabs.addTab(self.tab_dec, "Extract Data")
-
-        layout.addWidget(self.tabs)
-
-    def init_enc_tab(self):
-        w = QWidget()
-        l = QVBoxLayout(w)
-
-        # Cover Image
-        self.lbl_cover = QLabel("No Cover Image Selected")
-        self.lbl_cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_cover.setStyleSheet(
-            "border: 2px dashed #3f3f46; padding: 20px; color: gray;"
-        )
-        l.addWidget(self.lbl_cover)
-
-        b_sel = QPushButton("Select Cover Image (PNG)")
-        b_sel.clicked.connect(self.sel_cover)
-        l.addWidget(b_sel)
-
-        self.lbl_cap = QLabel("Capacity: 0 bytes")
-        self.lbl_cap.setStyleSheet("color: #00e676; font-weight: bold;")
-        l.addWidget(self.lbl_cap)
-        l.addSpacing(10)
-
-        # Payload
-        self.in_payload = QLineEdit(placeholderText="Path to secret file...")
-        self.in_payload.setReadOnly(True)
-        l.addWidget(self.in_payload)
-
-        b_pay = QPushButton("Select Secret File")
-        b_pay.clicked.connect(self.sel_payload)
-        l.addWidget(b_pay)
-
-        l.addStretch()
-
-        b_run = QPushButton("ENCODE & SAVE", objectName="Primary")
-        b_run.clicked.connect(self.run_encode)
-        l.addWidget(b_run)
-
-        self.cover_path = None
-        self.payload_path = None
-
-        return w
-
-    def init_dec_tab(self):
-        w = QWidget()
-        l = QVBoxLayout(w)
-
-        self.lbl_stego = QLabel("No Stego Image Selected")
-        self.lbl_stego.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_stego.setStyleSheet(
-            "border: 2px dashed #3f3f46; padding: 20px; color: gray;"
-        )
-        l.addWidget(self.lbl_stego)
-
-        b_sel = QPushButton("Select Stego Image")
-        b_sel.clicked.connect(self.sel_stego)
-        l.addWidget(b_sel)
-
-        l.addStretch()
-
-        b_run = QPushButton("EXTRACT DATA", objectName="Primary")
-        b_run.clicked.connect(self.run_decode)
-        l.addWidget(b_run)
-
-        self.stego_path = None
-        return w
-
-    def sel_cover(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self, "Select Cover", "", "Images (*.png *.jpg *.jpeg)"
-        )
-        if f:
-            self.cover_path = f
-            self.lbl_cover.setText(os.path.basename(f))
-            cap = StegoEngine.get_capacity(f)
-            self.lbl_cap.setText(f"Capacity: {cap} bytes")
-
-    def sel_payload(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Select Secret File")
-        if f:
-            self.payload_path = f
-            self.in_payload.setText(f)
-
-    def run_encode(self):
-        if not self.cover_path or not self.payload_path:
-            QMessageBox.warning(
-                self, "Error", "Select both cover image and secret file."
-            )
-            return
-
-        out, _ = QFileDialog.getSaveFileName(
-            self, "Save Stego Image", "", "PNG Image (*.png)"
-        )
-        if not out:
-            return
-
-        try:
-            StegoEngine.encode(self.cover_path, self.payload_path, out)
-            QMessageBox.information(self, "Success", f"Data hidden in {out}")
-            self.close()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-
-    def sel_stego(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self, "Select Stego Image", "", "PNG Image (*.png)"
-        )
-        if f:
-            self.stego_path = f
-            self.lbl_stego.setText(os.path.basename(f))
-
-    def run_decode(self):
-        if not self.stego_path:
-            QMessageBox.warning(self, "Error", "Select stego image.")
-            return
-
-        out, _ = QFileDialog.getSaveFileName(
-            self, "Extract Secret To...", "", "All Files (*.*)"
-        )
-        if not out:
-            return
-
-        try:
-            size_out = StegoEngine.decode(self.stego_path, out)
-            QMessageBox.information(
-                self, "Success", f"Extracted {size_out} bytes to {out}"
-            )
-            self.close()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-
-
-class GhostLinkDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("GhostLink Secure Tunnel (SFTP)")
-        self.setFixedSize(500, 600)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        self.link = GhostLink()
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-
-        # Connection Details
-        gb_conn = QGroupBox("Connection")
-        gb_conn.setStyleSheet(
-            "QGroupBox { border: 1px solid #3f3f46; margin-top: 10px; padding-top: 10px; font-weight: bold; color: white; }"
-        )
-        l_conn = QFormLayout(gb_conn)
-
-        self.in_host = QLineEdit()
-        self.in_port = QSpinBox()
-        self.in_port.setRange(1, 65535)
-        self.in_port.setValue(22)
-        self.in_user = QLineEdit()
-        self.in_pass = QLineEdit()
-        self.in_pass.setEchoMode(QLineEdit.EchoMode.Password)
-
-        l_conn.addRow("Host:", self.in_host)
-        l_conn.addRow("Port:", self.in_port)
-        l_conn.addRow("Username:", self.in_user)
-        l_conn.addRow("Password:", self.in_pass)
-
-        layout.addWidget(gb_conn)
-
-        # Proxy (Optional)
-        gb_proxy = QGroupBox("SOCKS5 Proxy (Optional)")
-        gb_proxy.setStyleSheet(
-            "QGroupBox { border: 1px solid #3f3f46; margin-top: 10px; padding-top: 10px; font-weight: bold; color: gray; }"
-        )
-        l_proxy = QHBoxLayout(gb_proxy)
-        self.in_prox_host = QLineEdit(placeholderText="127.0.0.1")
-        self.in_prox_port = QLineEdit(placeholderText="9050")
-        l_proxy.addWidget(QLabel("Host:"))
-        l_proxy.addWidget(self.in_prox_host)
-        l_proxy.addWidget(QLabel("Port:"))
-        l_proxy.addWidget(self.in_prox_port)
-
-        layout.addWidget(gb_proxy)
-
-        # Actions
-        btn_conn = QPushButton("TEST CONNECTION", objectName="Primary")
-        btn_conn.clicked.connect(self.do_connect)
-        layout.addWidget(btn_conn)
-
-        self.lbl_status = QLabel("Status: Disconnected")
-        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.lbl_status)
-
-        layout.addSpacing(20)
-        layout.addWidget(
-            QLabel("File Operations", styleSheet="font-weight: bold; color: #00e676;")
-        )
-
-        btn_upload = QPushButton(" Upload File to Remote Home")
-        btn_upload.clicked.connect(self.do_upload)
-        layout.addWidget(btn_upload)
-
-        layout.addStretch()
-
-    def do_connect(self):
-        h = self.in_host.text()
-        p = self.in_port.value()
-        u = self.in_user.text()
-        pwd = self.in_pass.text()
-
-        ph = self.in_prox_host.text()
-        pp = self.in_prox_port.text()
-
-        if not h or not u:
-            QMessageBox.warning(self, "Error", "Host and User required")
-            return
-
-        self.lbl_status.setText("Status: Connecting...")
-        self.lbl_status.repaint()
-
-        # Run in thread strictly speaking, but for simplicity/demo direct call
-        ok, msg = self.link.connect(h, p, u, pwd, proxy_host=ph, proxy_port=pp)
-        if ok:
-            self.lbl_status.setText(f"Status: {msg}")
-            self.lbl_status.setStyleSheet("color: #00e676")
-        else:
-            self.lbl_status.setText("Status: Failed")
-            self.lbl_status.setStyleSheet("color: #ff3d3d")
-            QMessageBox.critical(self, "Connection Error", msg)
-
-    def do_upload(self):
-        if not self.link.sftp:
-            QMessageBox.warning(self, "Error", "Establish connection first.")
-            return
-
-        f, _ = QFileDialog.getOpenFileName(self, "Select File to Upload")
-        if not f:
-            return
-
-        rem = os.path.basename(f)
-        ok, msg = self.link.upload(f, rem)
-        if ok:
-            QMessageBox.information(self, "Success", f"Uploaded to {rem}")
-        else:
-            QMessageBox.warning(self, "Error", msg)
-
-    def closeEvent(self, event):
-        self.link.close()
-        event.accept()
-
-
-class PassGenDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Titanium Password Generator")
-        self.setFixedSize(400, 350)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-
-        layout.addWidget(
-            QLabel("Generate High-Entropy Credentials", styleSheet="color: gray;")
-        )
-
-        # Length
-        h_len = QHBoxLayout()
-        self.spin_len = QSpinBox()
-        self.spin_len.setRange(8, 128)
-        self.spin_len.setValue(32)
-        h_len.addWidget(QLabel("Length:"))
-        h_len.addWidget(self.spin_len)
-        layout.addLayout(h_len)
-
-        # Result
-        self.out_pass = QLineEdit()
-        self.out_pass.setReadOnly(True)
-        self.out_pass.setStyleSheet(
-            "font-family: Consolas; font-size: 16px; color: #00e676; padding: 15px;"
-        )
-        layout.addWidget(self.out_pass)
-
-        # Actions
-        btn_gen = QPushButton(" GENERATE", objectName="Primary")
-        btn_gen.setIcon(qta.icon("fa5s.sync", color="black"))
-        btn_gen.clicked.connect(self.generate)
-        layout.addWidget(btn_gen)
-
-        btn_copy = QPushButton(" Copy to Clipboard")
-        btn_copy.clicked.connect(self.copy_to_clip)
-        layout.addWidget(btn_copy)
-
-        layout.addStretch()
-        self.generate()  # Init with one
-
-    def generate(self):
-        l = self.spin_len.value()
-        # Using core.tools
-        pwd = SecurityTools.generate_password(l)
-        self.out_pass.setText(pwd)
-
-    def copy_to_clip(self):
-        QApplication.clipboard().setText(self.out_pass.text())
-        QMessageBox.information(self, "Copied", "Password copied to clipboard.")
-
-
-class NotesDialog(QDialog):
-    def __init__(self, parent=None, vault_name=None, password=None):
-        super().__init__(parent)
-        self.setWindowTitle("Encrypted Notes Journal")
-        self.resize(900, 600)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        self.vault_name = vault_name
-        self.password = password
-        self.manager = NotesManager(vault_name)
-        self.current_note_id = None
-
-        main_layout = QHBoxLayout(self)
-
-        # Left Panel: Note List & Search
-        left_panel = QFrame(objectName="Card")
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(15, 15, 15, 15)
-
-        left_layout.addWidget(
-            QLabel(
-                "Your Notes",
-                styleSheet=f"font-size: 18px; font-weight: bold; color: {ACCENT_COLOR};",
-            )
-        )
-
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search notes...")
-        self.search_bar.textChanged.connect(self.do_search)
-        left_layout.addWidget(self.search_bar)
-
-        self.note_list = QListWidget()
-        self.note_list.itemClicked.connect(self.load_note)
-        self.note_list.setStyleSheet("border: none; background: transparent;")
-        left_layout.addWidget(self.note_list)
-
-        btn_new = QPushButton(" + New Note", objectName="Primary")
-        btn_new.clicked.connect(self.new_note)
-        left_layout.addWidget(btn_new)
-
-        main_layout.addWidget(left_panel, 1)
-
-        # Right Panel: Editor
-        right_panel = QFrame(objectName="Card")
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(20, 20, 20, 20)
-
-        # Title Row
-        title_row = QHBoxLayout()
-        self.in_title = QLineEdit()
-        self.in_title.setPlaceholderText("Note Title")
-        self.in_title.setStyleSheet(
-            f"font-size: 16px; font-weight: bold; color: white; border: none; background: transparent; padding: 0;"
-        )
-        title_row.addWidget(self.in_title)
-
-        btn_delete = QPushButton("Delete", objectName="Danger")
-        btn_delete.setFixedWidth(80)
-        btn_delete.clicked.connect(self.delete_note)
-        title_row.addWidget(btn_delete)
-
-        right_layout.addLayout(title_row)
-
-        # Separator
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #3f3f46;")
-        right_layout.addWidget(line)
-
-        # Content Editor
-        self.editor = QTextEdit()
-        self.editor.setPlaceholderText("Write your secure thoughts here...")
-        self.editor.setStyleSheet(
-            "font-family: Consolas; font-size: 14px; line-height: 1.5; border: none; background: transparent;"
-        )
-        right_layout.addWidget(self.editor)
-
-        # Status & Save
-        action_row = QHBoxLayout()
-        self.lbl_status = QLabel("Ready")
-        self.lbl_status.setStyleSheet(f"color: {TEXT_MUTED};")
-        action_row.addWidget(self.lbl_status)
-
-        action_row.addStretch()
-
-        btn_save = QPushButton(" Save Changes", objectName="Primary")
-        btn_save.setIcon(qta.icon("fa5s.save", color="black"))
-        btn_save.clicked.connect(self.save_note)
-        action_row.addWidget(btn_save)
-
-        right_layout.addLayout(action_row)
-
-        main_layout.addWidget(right_panel, 2)
-
-        self.refresh_list()
-
-    def refresh_list(self):
-        self.note_list.clear()
-        notes = self.manager.list_notes()
-
-        for n in notes:
-            note_content = self.manager.get_note(n["id"], self.password)
-            if note_content:
-                title = note_content.get("title", "Untitled")
-
-                widget_item = QListWidgetItem(title)
-                widget_item.setData(Qt.ItemDataRole.UserRole, n["id"])
-
-                modified = note_content.get("modified", "")
-                widget_item.setToolTip(f"Modified: {modified}")
-
-                self.note_list.addItem(widget_item)
-
-    def new_note(self):
-        self.current_note_id = None
-        self.in_title.clear()
-        self.editor.clear()
-        self.in_title.setFocus()
-        self.lbl_status.setText("New Note")
-
-    def load_note(self, item):
-        note_id = item.data(Qt.ItemDataRole.UserRole)
-        note = self.manager.get_note(note_id, self.password)
-
-        if note:
-            self.current_note_id = note_id
-            self.in_title.setText(note.get("title", ""))
-            self.editor.setText(note.get("content", ""))
-
-            mod = note.get("modified", "").split("T")[0]
-            self.lbl_status.setText(f"Last Modified: {mod}")
-
-    def save_note(self):
-        title = self.in_title.text()
-        content = self.editor.toPlainText()
-
-        if not title:
-            QMessageBox.warning(self, "Error", "Title cannot be empty")
-            return
-
-        if self.current_note_id:
-            self.manager.update_note(
-                self.current_note_id, title, content, self.password
-            )
-            self.lbl_status.setText("Saved existing note.")
-        else:
-            self.current_note_id = self.manager.create_note(
-                title, content, self.password
-            )
-            self.lbl_status.setText("Created new note.")
-
-        self.refresh_list()
-
-    def delete_note(self):
-        if not self.current_note_id:
-            return
-
-        confirm = QMessageBox.question(
-            self,
-            "Confirm Delete",
-            "Are you sure you want to delete this encrypted note? This cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-
-        if confirm == QMessageBox.StandardButton.Yes:
-            self.manager.delete_note(self.current_note_id)
-            self.new_note()
-            self.refresh_list()
-
-    def do_search(self, text):
-        if not text:
-            self.refresh_list()
-            return
-
-        results = self.manager.search_notes(text, self.password)
-        self.note_list.clear()
-
-        for note in results:
-            widget_item = QListWidgetItem(note["title"])
-            widget_item.setData(Qt.ItemDataRole.UserRole, note["id"])
-            self.note_list.addItem(widget_item)
-
-
-class InitVaultDialog(QDialog):
-    def __init__(self, parent=None, vault_mgr=None):
-        super().__init__(parent)
-        self.vault_mgr = vault_mgr
-        self.setWindowTitle("Create Secure Environment")
-        self.setFixedSize(500, 550)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        self.stack = QStackedWidget()
-        self.layout = QVBoxLayout(self)
-        self.layout.addWidget(self.stack)
-
-        self.init_step_1()
-        self.init_step_2()
-
-    def init_step_1(self):
-        w = QWidget()
-        l = QVBoxLayout(w)
-        l.setSpacing(15)
-
-        l.addWidget(
-            QLabel(
-                "Environment Setup",
-                styleSheet="font-size: 20px; font-weight: bold; color: white;",
-            )
-        )
-
-        self.in_name = QLineEdit(placeholderText="Vault Name (e.g., Personal)")
-        self.in_user = QLineEdit(placeholderText="Username")
-        self.in_pass = QLineEdit(placeholderText="Master Password")
-        self.in_pass.setEchoMode(QLineEdit.EchoMode.Password)
-        self.in_duress = QLineEdit(placeholderText="Duress Password (Panic)")
-        self.in_duress.setEchoMode(QLineEdit.EchoMode.Password)
-
-        l.addWidget(QLabel("Configuration:"))
-        l.addWidget(self.in_name)
-        l.addWidget(self.in_user)
-        l.addWidget(self.in_pass)
-        l.addWidget(self.in_duress)
-
-        l.addStretch()
-
-        btn_next = QPushButton("CREATE ENVIRONMENT", objectName="Primary")
-        btn_next.clicked.connect(self.action_create)
-        l.addWidget(btn_next)
-
-        self.stack.addWidget(w)
-
-    def init_step_2(self):
-        self.p2 = QWidget()
-        l = QVBoxLayout(self.p2)
-        l.setSpacing(15)
-
-        l.addWidget(
-            QLabel(
-                "Two-Factor Authentication",
-                styleSheet="font-size: 20px; font-weight: bold; color: #00e676;",
-            )
-        )
-        l.addWidget(
-            QLabel(
-                "Scan this QR Code with your Authenticator App, or enter the secret manually.",
-                styleSheet="color: gray;",
-            )
-        )
-
-        # Tabs for QR / Text
-        tabs = QTabWidget()
-        tabs.setStyleSheet(
-            "QTabWidget::pane { border: 0; } QTabBar::tab { background: #27272a; color: gray; padding: 10px; width: 100px; } QTabBar::tab:selected { background: #3f3f46; color: white; border-bottom: 2px solid #00e676; }"
-        )
-
-        # TAB 1: QR
-        t1 = QWidget()
-        l1 = QVBoxLayout(t1)
-        self.qr_lbl = QLabel()
-        self.qr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.qr_lbl.setStyleSheet(
-            "background: white; border-radius: 10px; padding: 10px;"
-        )
-        l1.addWidget(self.qr_lbl)
-        tabs.addTab(t1, "QR Code")
-
-        # TAB 2: TEXT
-        t2 = QWidget()
-        l2 = QVBoxLayout(t2)
-        self.txt_secret = QLineEdit()
-        self.txt_secret.setReadOnly(True)
-        self.txt_secret.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.txt_secret.setStyleSheet(
-            "font-size: 24px; letter-spacing: 5px; font-family: Consolas; color: #00e676;"
-        )
-        l2.addWidget(QLabel("Secret Key (Base32):"))
-        l2.addWidget(self.txt_secret)
-        tabs.addTab(t2, "Text Code")
-
-        l.addWidget(tabs)
-        l.addStretch()
-
-        btn_done = QPushButton("I HAVE SAVED IT", objectName="Primary")
-        btn_done.clicked.connect(self.accept)
-        l.addWidget(btn_done)
-
-        self.stack.addWidget(self.p2)
-
-    def action_create(self):
-        name = self.in_name.text()
-        user = self.in_user.text()
-        pwd = self.in_pass.text()
-        duress = self.in_duress.text()
-
-        if not all([name, user, pwd, duress]):
-            QMessageBox.warning(self, "Error", "All fields are required")
-            return
-
-        res, data = self.vault_mgr.create_vault(name, user, pwd, duress)
-        if not res:
-            QMessageBox.critical(self, "Error", data)
-            return
-
-        # Success, show step 2
-        secret = data
-        self.txt_secret.setText(secret)
-
-        # Generate QR
-        import pyotp
-
-        totp = pyotp.TOTP(secret)
-        uri = totp.provisioning_uri(name=user, issuer_name="NDSFC Vault")
-
-        img = qrcode.make(uri)
-        # Convert PIL to Pixmap
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        qimg = QIcon(
-            qta.icon("fa5s.lock").pixmap(200, 200)
-        )  # Placeholder if fails? No, use QPixmap
-
-        # Properly load from buffer
-        from PyQt6.QtGui import QPixmap
-
-        qp = QPixmap()
-        qp.loadFromData(buf.getvalue())
-        self.qr_lbl.setPixmap(qp.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
-
-        self.stack.setCurrentIndex(1)
-
-
-class InitVaultDialog_OLD(QDialog):
-    # Removing old manual dialog logic
-    pass
-
-
-class TaskWorker(QThread):
-    finished = pyqtSignal(object)
-
-    def __init__(self, func, *args, **kwargs):
-        super().__init__()
-        self.func, self.args, self.kwargs = func, args, kwargs
-
-    def run(self):
-        try:
-            res = self.func(*self.args, **self.kwargs)
-            self.finished.emit((True, res))
-        except Exception as e:
-            self.finished.emit((False, str(e)))
-
-
-class ThemeCreatorDialog(QDialog):
-    def __init__(self, parent=None, theme_manager=None):
-        super().__init__(parent)
-        self.tm = theme_manager
-        self.setWindowTitle("Design Custom Theme")
-        self.resize(500, 400)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-
-        # Name Input
-        self.in_name = QLineEdit()
-        self.in_name.setPlaceholderText("Theme Name (e.g. Neon Nights)")
-        layout.addWidget(QLabel("Theme Name:"))
-        layout.addWidget(self.in_name)
-
-        # Colors
-        self.colors = {
-            "accent": "#00e676",
-            "secondary": "#7f5af0",
-            "tertiary": "#00b4d8",
-        }
-
-        # Color Pickers
-        form = QFormLayout()
-
-        self.btn_accent = QPushButton(self.colors["accent"])
-        self.btn_accent.clicked.connect(
-            lambda: self.pick_color("accent", self.btn_accent)
-        )
-        self.style_button(self.btn_accent, self.colors["accent"])
-
-        self.btn_secondary = QPushButton(self.colors["secondary"])
-        self.btn_secondary.clicked.connect(
-            lambda: self.pick_color("secondary", self.btn_secondary)
-        )
-        self.style_button(self.btn_secondary, self.colors["secondary"])
-
-        self.btn_tertiary = QPushButton(self.colors["tertiary"])
-        self.btn_tertiary.clicked.connect(
-            lambda: self.pick_color("tertiary", self.btn_tertiary)
-        )
-        self.style_button(self.btn_tertiary, self.colors["tertiary"])
-
-        form.addRow("Primary Accent:", self.btn_accent)
-        form.addRow("Secondary Accent:", self.btn_secondary)
-        form.addRow("Tertiary Accent:", self.btn_tertiary)
-
-        layout.addLayout(form)
-
-        layout.addStretch()
-
-        # Save
-        btn_save = QPushButton("Save Theme", objectName="Primary")
-        btn_save.clicked.connect(self.save_theme)
-        layout.addWidget(btn_save)
-
-    def style_button(self, btn, color):
-        btn.setStyleSheet(
-            f"background-color: {color}; color: black; font-weight: bold; border: 2px solid white; border-radius: 5px;"
-        )
-        btn.setText(color)
-
-    def pick_color(self, key, btn):
-        c = QColorDialog.getColor(QColor(self.colors[key]), self, f"Select {key} Color")
-        if c.isValid():
-            hex_c = c.name()
-            self.colors[key] = hex_c
-            self.style_button(btn, hex_c)
-
-    def save_theme(self):
-        name = self.in_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Error", "Theme name required")
-            return
-
-        if self.tm.save_custom_theme(name, self.colors):
-            QMessageBox.information(self, "Success", f"Theme '{name}' saved!")
-            self.accept()
-        else:
-            QMessageBox.critical(self, "Error", "Failed to save theme")
-
-
-class FolderWatcherDialog(QDialog):
-    def __init__(self, parent=None, watcher=None):
-        super().__init__(parent)
-        self.watcher = watcher
-        self.setWindowTitle("Auto-Encrypt Watcher")
-        self.resize(600, 400)
-        self.setStyleSheet(STYLESHEET + "QDialog { background-color: #09090b; }")
-
-        layout = QVBoxLayout(self)
-
-        # Status
-        self.lbl_status = QLabel("Service Status: STOPPED")
-        self.lbl_status.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: gray;"
-        )
-        layout.addWidget(self.lbl_status)
-
-        # Toggle
-        self.btn_toggle = QPushButton("START WATCHER", objectName="Primary")
-        self.btn_toggle.clicked.connect(self.toggle_service)
-        layout.addWidget(self.btn_toggle)
-
-        layout.addSpacing(20)
-
-        # Folder List
-        layout.addWidget(
-            QLabel(
-                "Monitored Folders:",
-                styleSheet=f"color: {ACCENT_COLOR}; font-weight: bold;",
-            )
-        )
-        self.list_folders = QListWidget()
-        layout.addWidget(self.list_folders)
-
-        # Controls
-        row = QHBoxLayout()
-        b_add = QPushButton("Add Folder")
-        b_add.clicked.connect(self.add_folder)
-        b_rem = QPushButton("Remove Selected")
-        b_rem.clicked.connect(self.remove_folder)
-        row.addWidget(b_add)
-        row.addWidget(b_rem)
-        layout.addLayout(row)
-
-        # Log
-        layout.addWidget(QLabel("Activity Log:", styleSheet="color: gray;"))
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setFixedHeight(100)
-        layout.addWidget(self.log)
-
-        self.update_ui()
-
-        # Connect signal
-        if self.watcher:
-            self.watcher.file_processed.connect(self.on_file_processed)
-
-    def update_ui(self):
-        if self.watcher and self.watcher.running:
-            self.lbl_status.setText("Service Status: RUNNING")
-            self.lbl_status.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: #00e676;"
-            )
-            self.btn_toggle.setText("STOP WATCHER")
-            self.btn_toggle.setObjectName("Danger")
-        else:
-            self.lbl_status.setText("Service Status: STOPPED")
-            self.lbl_status.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: gray;"
-            )
-            self.btn_toggle.setText("START WATCHER")
-            self.btn_toggle.setObjectName("Primary")
-
-        # Refresh style logic workaround since Qt doesn't dynamic reload objectName style easily
-        # We manually apply specific style or just trust stylesheet reload?
-        # A simple trick is unpolish/polish, but let's just set specific style
-        if self.btn_toggle.objectName() == "Danger":
-            self.btn_toggle.setStyleSheet("background-color: #ff3d3d; color: white;")
-        else:
-            self.btn_toggle.setStyleSheet(
-                f"background-color: {ACCENT_COLOR}; color: black;"
-            )
-
-        self.list_folders.clear()
-        if self.watcher:
-            for f in self.watcher.get_folders():
-                self.list_folders.addItem(f)
-
-    def toggle_service(self):
-        if not self.watcher:
-            return
-
-        if self.watcher.running:
-            self.watcher.stop()
-        else:
-            if not self.watcher.get_folders():
-                QMessageBox.warning(
-                    self, "Error", "Add at least one folder monitoring."
-                )
-                return
-            self.watcher.start()
-        self.update_ui()
-
-    def add_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "Select Folder to Watch")
-        if d and self.watcher:
-            self.watcher.add_folder(d)
-            self.update_ui()
-
-    def remove_folder(self):
-        item = self.list_folders.currentItem()
-        if item and self.watcher:
-            self.watcher.remove_folder(item.text())
-            self.update_ui()
-
-    def on_file_processed(self, filename, status):
-        self.log.append(f"[{time.strftime('%H:%M:%S')}] {filename}: {status}")
-
 
 class NDSFC_Pro(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NDSFC | GitHub : MintyExtremum & Vyxara-Arch")
         self.resize(1150, 750)
-        self.setStyleSheet(STYLESHEET)
 
         self.vault_mgr = VaultManager()
         self.auth = AuthManager()
         self.session = SecureSession()
+        self._session_password = None
         self.watcher = None
         self.theme_manager = ThemeManager()
         self.indexer = None
+        self.current_theme_mode = "light"
+        self.current_theme_name = "Noxium Teal"
+        self.auto_lock_timer = QTimer(self)
+        self.auto_lock_timer.setSingleShot(True)
+        self.auto_lock_timer.timeout.connect(self.do_logout)
+        app = QApplication.instance()
+        if app:
+            app.installEventFilter(self)
+
+        palette = self.theme_manager.get_palette(
+            self.current_theme_mode, self.current_theme_name
+        )
+        styles.apply_palette(palette)
+        self.setStyleSheet(styles.build_stylesheet())
 
         self.main_stack = FadeStack()
         self.setCentralWidget(self.main_stack)
@@ -1442,44 +98,13 @@ class NDSFC_Pro(QMainWindow):
 
     def init_login_ui(self):
         w = QWidget()
-        w.setObjectName("LoginBg")
-        w.setStyleSheet(
-            "QWidget#LoginBg { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #09090b, stop:1 #18181b); }"
-        )
+        w.setObjectName("LoginPage")
 
         layout = QVBoxLayout(w)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = QFrame(objectName="GlassCard")
-        card.setFixedSize(400, 560)
-        card.setStyleSheet(
-            """
-            QFrame#GlassCard {
-                background-color: rgba(24, 24, 27, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 24px;
-            }
-            QLabel { color: white; }
-            QLineEdit {
-                background: rgba(0,0,0,0.3);
-                border: 1px solid rgba(255,255,255,0.1);
-                border-radius: 8px;
-                padding: 12px;
-                color: white;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #00e676;
-            }
-            QComboBox {
-                padding: 10px;
-                border: 1px solid rgba(255,255,255,0.1);
-                border-radius: 8px;
-                background: rgba(0,0,0,0.3);
-                color: white;
-            }
-        """
-        )
+        card = QFrame(objectName="Panel")
+        card.setFixedSize(420, 520)
 
         cl = QVBoxLayout(card)
         cl.setContentsMargins(40, 50, 40, 50)
@@ -1487,13 +112,15 @@ class NDSFC_Pro(QMainWindow):
 
         # Icon / Logo
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(qta.icon("fa5s.shield-alt", color="#00e676").pixmap(72, 72))
+        icon_lbl.setPixmap(
+            qta.icon("fa5s.shield-alt", color=styles.ACCENT_COLOR).pixmap(64, 64)
+        )
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(icon_lbl)
 
-        title = QLabel("NDSFC CLASSIFIED")
+        title = QLabel("NOXIUM VAULT")
         title.setStyleSheet(
-            "font-size: 20px; font-weight: bold; letter-spacing: 2px; color: #e4e4e7;"
+            "font-size: 20px; font-weight: 700; letter-spacing: 2px;"
         )
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(title)
@@ -1518,22 +145,8 @@ class NDSFC_Pro(QMainWindow):
         cl.addSpacing(10)
 
         # Login Button
-        btn_login = QPushButton("ESTABLISH LINK")
+        btn_login = QPushButton("SIGN IN", objectName="Primary")
         btn_login.setFixedHeight(50)
-        btn_login.setStyleSheet(
-            """
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00e676, stop:1 #00b359);
-                color: black;
-                font-weight: bold;
-                border-radius: 10px;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background: #00ff88;
-            }
-        """
-        )
         btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_login.clicked.connect(self.do_login)
         cl.addWidget(btn_login)
@@ -1542,19 +155,13 @@ class NDSFC_Pro(QMainWindow):
 
         # Footer Actions
         row = QHBoxLayout()
-        btn_new = QPushButton(" Create New")
-        btn_new.setIcon(qta.icon("fa5s.plus", color="gray"))
-        btn_new.setStyleSheet(
-            "background: transparent; color: gray; border: none; font-weight: bold;"
-        )
+        btn_new = QPushButton(" Create New", objectName="LinkButton")
+        btn_new.setIcon(qta.icon("fa5s.plus", color=styles.TEXT_MUTED))
         btn_new.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_new.clicked.connect(self.show_create_vault_dialog)
 
-        btn_imp = QPushButton(" Import")
-        btn_imp.setIcon(qta.icon("fa5s.file-import", color="gray"))
-        btn_imp.setStyleSheet(
-            "background: transparent; color: gray; border: none; font-weight: bold;"
-        )
+        btn_imp = QPushButton(" Import", objectName="LinkButton")
+        btn_imp.setIcon(qta.icon("fa5s.file-import", color=styles.TEXT_MUTED))
         btn_imp.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_imp.clicked.connect(self.do_vault_import)
 
@@ -1578,33 +185,13 @@ class NDSFC_Pro(QMainWindow):
 
         sidebar = QFrame(objectName="Sidebar")
         sidebar.setFixedWidth(280)
-        sidebar.setStyleSheet(
-            """
-            QFrame#Sidebar {
-                background: #09090b;
-                border-right: 1px solid #18181b;
-            }
-            QPushButton {
-                text-align: left;
-                padding: 12px;
-                border-radius: 10px;
-                color: #a1a1aa;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.03);
-                color: white;
-            }
-        """
-        )
         sb_l = QVBoxLayout(sidebar)
         sb_l.setContentsMargins(20, 40, 20, 20)
 
-        title = QLabel("NDSFC TERMINAL")
+        title = QLabel("NOXIUM CONTROL")
+        title.setProperty("tone", "accent")
         title.setStyleSheet(
-            f"font-size: 18px; font-weight: bold; letter-spacing: 3px; color: {ACCENT_COLOR};"
+            "font-size: 16px; font-weight: 700; letter-spacing: 3px;"
         )
         sb_l.addWidget(title)
         sb_l.addSpacing(40)
@@ -1621,18 +208,17 @@ class NDSFC_Pro(QMainWindow):
         self.nav_buttons = []
         for name, icon, idx in btns:
             b = QPushButton(f"  {name}")
-            b.setIcon(qta.icon(icon, color="#a1a1aa"))
+            b.setIcon(qta.icon(icon, color=styles.TEXT_MUTED))
             b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setProperty("nav", True)
+            b.setProperty("active", False)
             b.clicked.connect(lambda ch, i=idx: self.switch_tab(i))
-            self.nav_buttons.append(b)
+            self.nav_buttons.append((b, icon))
             sb_l.addWidget(b)
 
         sb_l.addStretch()
         b_out = QPushButton(" DISCONNECT", objectName="Danger")
-        b_out.setIcon(qta.icon("fa5s.power-off", color="gray"))
-        b_out.setStyleSheet(
-            "QPushButton { color: gray; } QPushButton:hover { color: #ff3d3d; }"
-        )
+        b_out.setIcon(qta.icon("fa5s.power-off", color=styles.TEXT_MUTED))
         b_out.clicked.connect(self.do_logout)
         sb_l.addWidget(b_out)
 
@@ -1644,9 +230,20 @@ class NDSFC_Pro(QMainWindow):
         row.addWidget(sidebar)
         row.addWidget(self.dash_stack)
         self.main_stack.addWidget(w)
+        self.set_nav_active(0)
 
     def switch_tab(self, idx):
         self.dash_stack.fade_to_index(idx)
+        self.set_nav_active(idx)
+
+    def set_nav_active(self, idx):
+        for i, (btn, icon) in enumerate(self.nav_buttons):
+            active = i == idx
+            btn.setProperty("active", active)
+            color = styles.ACCENT_COLOR if active else styles.TEXT_MUTED
+            btn.setIcon(qta.icon(icon, color=color))
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
 
     def tab_home(self):
         p = QWidget()
@@ -1656,7 +253,7 @@ class NDSFC_Pro(QMainWindow):
         # Header
         header = QHBoxLayout()
         lbl_welcome = QLabel("Mission Control")
-        lbl_welcome.setStyleSheet("font-size: 28px; font-weight: bold; color: white;")
+        lbl_welcome.setStyleSheet("font-size: 28px; font-weight: bold;")
         header.addWidget(lbl_welcome)
         header.addStretch()
 
@@ -1664,18 +261,7 @@ class NDSFC_Pro(QMainWindow):
         self.txt_search = QLineEdit()
         self.txt_search.setPlaceholderText("Search Encrypted Index...")
         self.txt_search.setFixedWidth(300)
-        self.txt_search.setStyleSheet(
-            """
-            QLineEdit {
-                background: #18181b; 
-                border: 1px solid #3f3f46; 
-                border-radius: 15px; 
-                padding: 5px 15px; 
-                color: white;
-            }
-            QLineEdit:focus { border: 1px solid #00e676; }
-        """
-        )
+        self.txt_search.setObjectName("SearchField")
         self.txt_search.textChanged.connect(self.do_search)
         header.addWidget(self.txt_search)
 
@@ -1683,7 +269,7 @@ class NDSFC_Pro(QMainWindow):
         l.addSpacing(20)
 
         # Content Stack
-        self.dash_content = QStackedWidget()
+        self.dash_content = FadeStack()
 
         # PAGE 0: Widgets
         page_widgets = QWidget()
@@ -1699,49 +285,44 @@ class NDSFC_Pro(QMainWindow):
 
         # 2. Vault Status (Row 0, Col 1)
         v_card = QFrame(objectName="Card")
-        v_card.setStyleSheet(
-            f"QFrame#Card {{ background-color: {CARD_COLOR}; border-radius: 16px; border: 1px solid #27272a; }}"
-        )
-        v_card.setFixedSize(300, 160)
+        v_card.setMinimumHeight(160)
         vl = QVBoxLayout(v_card)
-        vl.addWidget(
-            QLabel("Active Environment", styleSheet="font-weight: bold; color: gray;")
-        )
+        lbl_active = QLabel("Active Environment")
+        lbl_active.setProperty("tone", "muted")
+        lbl_active.setStyleSheet("font-weight: bold;")
+        vl.addWidget(lbl_active)
         self.lbl_vault_name = QLabel(self.session.current_vault or "LOCKED")
-        self.lbl_vault_name.setStyleSheet(
-            f"font-size: 24px; font-weight: bold; color: {ACCENT_COLOR};"
-        )
+        self.lbl_vault_name.setProperty("tone", "accent")
+        self.lbl_vault_name.setStyleSheet("font-size: 24px; font-weight: bold;")
         vl.addWidget(self.lbl_vault_name)
         vl.addStretch()
         b_lock = QPushButton("LOCK NOW")
-        b_lock.setStyleSheet("background: #27272a; color: white; border: 0px;")
+        b_lock.setObjectName("Secondary")
         b_lock.clicked.connect(self.do_logout)
         vl.addWidget(b_lock)
         grid.addWidget(v_card, 0, 1)
 
         # 3. Quick Actions (Row 0, Col 2)
         q_card = QFrame(objectName="Card")
-        q_card.setStyleSheet(
-            f"QFrame#Card {{ background-color: {CARD_COLOR}; border-radius: 16px; border: 1px solid #27272a; }}"
-        )
-        q_card.setFixedSize(300, 160)
+        q_card.setMinimumHeight(160)
         ql = QVBoxLayout(q_card)
-        ql.addWidget(
-            QLabel("Quick Actions", styleSheet="font-weight: bold; color: gray;")
-        )
+        lbl_quick = QLabel("Quick Actions")
+        lbl_quick.setProperty("tone", "muted")
+        lbl_quick.setStyleSheet("font-weight: bold;")
+        ql.addWidget(lbl_quick)
 
         bq1 = QPushButton("  Encrypt File")
-        bq1.setIcon(qta.icon("fa5s.lock", color="white"))
+        bq1.setIcon(qta.icon("fa5s.lock", color=styles.ACCENT_COLOR))
         bq1.clicked.connect(lambda: self.switch_tab(1))  # Crypto tab
         ql.addWidget(bq1)
 
         bq2 = QPushButton("  Secure Tunnel")
-        bq2.setIcon(qta.icon("fa5s.network-wired", color="white"))
+        bq2.setIcon(qta.icon("fa5s.network-wired", color=styles.ACCENT_COLOR))
         bq2.clicked.connect(self.open_ghostlink)
         ql.addWidget(bq2)
 
         bq3 = QPushButton("  Rebuild Index")
-        bq3.setIcon(qta.icon("fa5s.search-plus", color="white"))
+        bq3.setIcon(qta.icon("fa5s.search-plus", color=styles.ACCENT_COLOR))
         bq3.clicked.connect(self.rebuild_index)
         ql.addWidget(bq3)
 
@@ -1749,13 +330,11 @@ class NDSFC_Pro(QMainWindow):
 
         # Row 1: Audit Log
         audit_frame = QFrame(objectName="Card")
-        audit_frame.setStyleSheet(
-            f"QFrame#Card {{ background-color: {CARD_COLOR}; border-radius: 16px; border: 1px solid #27272a; }}"
-        )
         al = QVBoxLayout(audit_frame)
-        al.addWidget(
-            QLabel("Security Audit Log", styleSheet="font-weight: bold; color: gray;")
-        )
+        lbl_audit = QLabel("Security Audit Log")
+        lbl_audit.setProperty("tone", "muted")
+        lbl_audit.setStyleSheet("font-weight: bold;")
+        al.addWidget(lbl_audit)
 
         self.list_audit = QListWidget()
         self.list_audit.setStyleSheet(
@@ -1777,18 +356,17 @@ class NDSFC_Pro(QMainWindow):
         l_results = QVBoxLayout(page_results)
 
         lbl_res = QLabel("Search Results")
-        lbl_res.setStyleSheet("font-size: 18px; font-weight: bold; color: #00e676;")
+        lbl_res.setProperty("tone", "accent")
+        lbl_res.setStyleSheet("font-size: 18px; font-weight: bold;")
         l_results.addWidget(lbl_res)
 
         self.table_results = QTableWidget()
+        self.table_results.setObjectName("ResultsTable")
         self.table_results.setColumnCount(5)
         self.table_results.setHorizontalHeaderLabels(
             ["Filename", "Size", "Date", "Original Path", "Algo"]
         )
         self.table_results.horizontalHeader().setStretchLastSection(True)
-        self.table_results.setStyleSheet(
-            "QTableWidget { background: transparent; border: 1px solid #3f3f46; color: white; } QHeaderView::section { background: #18181b; color: gray; }"
-        )
         l_results.addWidget(self.table_results)
 
         self.dash_content.addWidget(page_results)
@@ -1798,10 +376,10 @@ class NDSFC_Pro(QMainWindow):
 
     def do_search(self, text):
         if not text:
-            self.dash_content.setCurrentIndex(0)
+            self.dash_content.fade_to_index(0)
             return
 
-        self.dash_content.setCurrentIndex(1)
+        self.dash_content.fade_to_index(1)
         if self.indexer:
             res = self.indexer.search(text)
             self.table_results.setRowCount(0)
@@ -1836,7 +414,7 @@ class NDSFC_Pro(QMainWindow):
         # Header
         header = QHBoxLayout()
         lbl_title = QLabel("Cryptographer")
-        lbl_title.setStyleSheet("font-size: 28px; font-weight: bold; color: white;")
+        lbl_title.setStyleSheet("font-size: 28px; font-weight: bold;")
         header.addWidget(lbl_title)
         header.addStretch()
         l.addLayout(header)
@@ -1848,77 +426,74 @@ class NDSFC_Pro(QMainWindow):
 
         # Left Panel: Configuration
         config_card = QFrame(objectName="Card")
-        config_card.setStyleSheet(
-            f"QFrame#Card {{ background-color: {CARD_COLOR}; border-radius: 16px; border: 1px solid #27272a; }}"
-        )
         config_card.setFixedWidth(320)
         cl = QVBoxLayout(config_card)
         cl.setSpacing(15)
 
-        cl.addWidget(
-            QLabel(
-                "Encryption Settings",
-                styleSheet="font-weight: bold; color: gray; font-size: 16px;",
-            )
-        )
+        lbl_settings = QLabel("Encryption Settings")
+        lbl_settings.setProperty("tone", "muted")
+        lbl_settings.setStyleSheet("font-weight: bold; font-size: 16px;")
+        cl.addWidget(lbl_settings)
 
         # Mode Selector
-        cl.addWidget(QLabel("Mode:", styleSheet="color: gray;"))
+        lbl_mode = QLabel("Mode:")
+        lbl_mode.setProperty("tone", "muted")
+        cl.addWidget(lbl_mode)
         self.crypto_mode = QComboBox()
         self.crypto_mode.addItems(
             [
-                "Standard (ChaCha20)",
-                "AES-SIV (Anti-Replay)",
-                "Blowfish (CTR)",
-                "CAST5 (CTR)",
-                "Post-Quantum (Cascade)",
+                "ChaCha20-Poly1305 (Fast)",
+                "AES-256-GCM (Balanced)",
             ]
         )
+        if CryptoEngine.pqc_available():
+            self.crypto_mode.addItem("PQC Hybrid (Kyber)")
         cl.addWidget(self.crypto_mode)
 
         # Options
         cl.addSpacing(10)
-        cl.addWidget(QLabel("Options:", styleSheet="color: gray;"))
+        lbl_options = QLabel("Options:")
+        lbl_options.setProperty("tone", "muted")
+        cl.addWidget(lbl_options)
         self.chk_shred = QCheckBox("Secure Shred Original")
         self.chk_shred.setChecked(True)
-        self.chk_shred.setStyleSheet("color: white;")
         cl.addWidget(self.chk_shred)
 
         self.chk_compress = QCheckBox("Compress Before Encrypt")
-        self.chk_compress.setStyleSheet("color: white;")
         cl.addWidget(self.chk_compress)
 
         cl.addStretch()
 
         # File Stats
-        cl.addWidget(
-            QLabel("Statistics:", styleSheet="color: gray; font-weight: bold;")
-        )
+        lbl_stats = QLabel("Statistics:")
+        lbl_stats.setProperty("tone", "muted")
+        lbl_stats.setStyleSheet("font-weight: bold;")
+        cl.addWidget(lbl_stats)
         self.lbl_file_count = QLabel("Files: 0")
-        self.lbl_file_count.setStyleSheet("color: #00e676; font-family: Consolas;")
+        self.lbl_file_count.setProperty("tone", "accent")
+        self.lbl_file_count.setProperty("mono", True)
+        self.lbl_file_count.setStyleSheet("font-weight: 600;")
         cl.addWidget(self.lbl_file_count)
 
         self.lbl_total_size = QLabel("Total: 0 KB")
-        self.lbl_total_size.setStyleSheet("color: #7f5af0; font-family: Consolas;")
+        self.lbl_total_size.setProperty("tone", "accent-secondary")
+        self.lbl_total_size.setProperty("mono", True)
+        self.lbl_total_size.setStyleSheet("font-weight: 600;")
         cl.addWidget(self.lbl_total_size)
 
         grid.addWidget(config_card, 0, 0, 2, 1)
 
         # Right Panel: File List
         file_card = QFrame(objectName="Card")
-        file_card.setStyleSheet(
-            f"QFrame#Card {{ background-color: {CARD_COLOR}; border-radius: 16px; border: 1px solid #27272a; }}"
-        )
         fcl = QVBoxLayout(file_card)
 
-        fcl.addWidget(
-            QLabel(
-                "File Queue",
-                styleSheet="font-weight: bold; color: gray; font-size: 16px;",
-            )
-        )
+        lbl_queue = QLabel("File Queue")
+        lbl_queue.setProperty("tone", "muted")
+        lbl_queue.setStyleSheet("font-weight: bold; font-size: 16px;")
+        fcl.addWidget(lbl_queue)
 
         self.file_table = QTableWidget()
+        self.file_table.setObjectName("DropTable")
         self.file_table.setColumnCount(3)
         self.file_table.setHorizontalHeaderLabels(["Filename", "Size", "Path"])
         self.file_table.horizontalHeader().setStretchLastSection(True)
@@ -1931,22 +506,17 @@ class NDSFC_Pro(QMainWindow):
         # self.file_table.dropEvent = self.on_drop # Connected logic should handle this
         self.file_table.dropEvent = self.on_drop
         self.file_table.setToolTip("Drag & drop files here")
-        self.file_table.setStyleSheet(
-            "QTableWidget { background: #18181b; border: 2px dashed #3f3f46; color: white; gridline-color: #3f3f46; }"
-            "QHeaderView::section { background: #27272a; color: gray; padding: 5px; }"
-            "QTableWidget::item:selected { background: #00e676; color: black; }"
-        )
         self.file_table.itemSelectionChanged.connect(self.update_file_stats)
         fcl.addWidget(self.file_table)
 
         # File Actions
         file_acts = QHBoxLayout()
         b_add = QPushButton(" Add Files")
-        b_add.setIcon(qta.icon("fa5s.plus", color="white"))
+        b_add.setIcon(qta.icon("fa5s.plus", color=styles.TEXT_COLOR))
         b_add.clicked.connect(self.add_files)
 
         b_remove = QPushButton(" Remove")
-        b_remove.setIcon(qta.icon("fa5s.trash", color="white"))
+        b_remove.setIcon(qta.icon("fa5s.trash", color=styles.TEXT_COLOR))
         b_remove.clicked.connect(self.remove_selected_files)
 
         b_clear = QPushButton(" Clear All")
@@ -1967,16 +537,13 @@ class NDSFC_Pro(QMainWindow):
         action_row = QHBoxLayout()
 
         b_enc = QPushButton(" ENCRYPT ALL", objectName="Primary")
-        b_enc.setIcon(qta.icon("fa5s.lock", color="black"))
+        b_enc.setIcon(qta.icon("fa5s.lock", color="white"))
         b_enc.setFixedHeight(50)
         b_enc.clicked.connect(self.run_encrypt)
 
-        b_dec = QPushButton(" DECRYPT ALL")
-        b_dec.setIcon(qta.icon("fa5s.unlock", color="white"))
+        b_dec = QPushButton(" DECRYPT ALL", objectName="Secondary")
+        b_dec.setIcon(qta.icon("fa5s.unlock", color=styles.TEXT_COLOR))
         b_dec.setFixedHeight(50)
-        b_dec.setStyleSheet(
-            "background-color: #7f5af0; color: white; border-radius: 8px; font-weight: bold;"
-        )
         b_dec.clicked.connect(self.run_decrypt)
 
         action_row.addWidget(b_enc)
@@ -2004,20 +571,37 @@ class NDSFC_Pro(QMainWindow):
         self.set_algo = QComboBox()
         self.set_algo.addItems(
             [
-                "ChaCha20-Poly1305 (Standard)",
+                "ChaCha20-Poly1305 (Fast)",
                 "AES-256-GCM (Balanced)",
-                "Quantum-Resistant (PQC Cascade)",
-                "2FA Protected (Answer Required)",
             ]
         )
+        if CryptoEngine.pqc_available():
+            self.set_algo.addItem("PQC Hybrid (Kyber)")
+
+        self.chk_default_compress = QCheckBox("Compress before encrypt")
 
         self.set_shred = QSpinBox()
         self.set_shred.setRange(1, 35)
         self.set_shred.setValue(3)
         self.set_shred.setSuffix(" Passes")
 
+        self.set_auto_lock = QSpinBox()
+        self.set_auto_lock.setRange(0, 120)
+        self.set_auto_lock.setValue(10)
+        self.set_auto_lock.setSuffix(" min")
+
+        self.set_theme_mode = QComboBox()
+        self.set_theme_mode.addItems(["Light", "Dark"])
+
         self.set_theme = QComboBox()
         self.set_theme.addItems(self.theme_manager.get_all_theme_names())
+
+        self.chk_pqc_enable = QCheckBox("Enable PQC Hybrid")
+        self.set_pqc_kem = QComboBox()
+        self.set_pqc_kem.addItems(CryptoEngine.pqc_kem_names())
+        if not CryptoEngine.pqc_available():
+            self.chk_pqc_enable.setEnabled(False)
+            self.set_pqc_kem.setEnabled(False)
 
         btn_create = QPushButton("Design Custom Theme")
         btn_create.clicked.connect(self.open_theme_creator)
@@ -2026,13 +610,22 @@ class NDSFC_Pro(QMainWindow):
         btn_save.clicked.connect(self.save_settings)
 
         fl.addRow("Default Encryption:", self.set_algo)
+        fl.addRow("Compression:", self.chk_default_compress)
         fl.addRow("Shredder Intensity:", self.set_shred)
-        fl.addRow("UI Accent Color:", self.set_theme)
+        fl.addRow("Auto-Lock:", self.set_auto_lock)
+        fl.addRow("Theme Mode:", self.set_theme_mode)
+        fl.addRow("UI Accent:", self.set_theme)
         fl.addRow("", btn_create)
+        fl.addRow("PQC Hybrid:", self.chk_pqc_enable)
+        fl.addRow("PQC KEM:", self.set_pqc_kem)
 
         btn_export = QPushButton("Backup Vault (.vib)")
         btn_export.clicked.connect(self.do_vault_export)
         fl.addRow("Vault Backup:", btn_export)
+
+        btn_recovery = QPushButton("Generate Recovery Shares")
+        btn_recovery.clicked.connect(self.open_recovery_shares)
+        fl.addRow("Recovery Kit:", btn_recovery)
 
         fl.addRow("", btn_save)
 
@@ -2175,18 +768,50 @@ class NDSFC_Pro(QMainWindow):
         pwd = self.in_pass.text()
         code = self.in_2fa.text()
 
+        if not vault_name:
+            QMessageBox.warning(self, "Error", "Select a vault first.")
+            return
+        if not pwd or not code:
+            QMessageBox.warning(self, "Error", "Password and 2FA code required.")
+            return
+
         path = self.vault_mgr.get_vault_path(vault_name)
         self.auth.set_active_vault(path)
 
         res, msg = self.auth.login(pwd, code)
         if res:
-            self.watcher = FolderWatcher(CryptoEngine, pwd)
-            self.indexer = IndexManager(vault_name, pwd)
-            self.session.start_session(b"TEMP", vault_name)
+            self._session_password = pwd
+            algo = self.auth.settings.get("file_algo", "chacha20-poly1305")
+            compress = self.auth.settings.get("file_compress", False)
+            pqc_enabled = self.auth.settings.get("pqc_enabled", False)
+            pqc_kem = self.auth.settings.get("pqc_kem", "kyber512")
+            pqc_pub = None
+            if pqc_enabled:
+                if not self.auth.ensure_pqc_keys(pwd):
+                    QMessageBox.warning(self, "Warning", "PQC keys unavailable. Falling back.")
+                    pqc_enabled = False
+                pqc_pub = self.auth.get_pqc_public_key()
+            self.watcher = FolderWatcher(
+                CryptoEngine,
+                pwd,
+                mode=algo,
+                compress=compress,
+                pqc_public_key=pqc_pub,
+                pqc_kem=pqc_kem,
+            )
+            self.indexer = IndexManager(
+                vault_name, password=pwd, vault_key=self.auth.vault_key
+            )
+            self.session.start_session(self.auth.vault_key or b"TEMP", vault_name)
+            if hasattr(self, "lbl_vault_name"):
+                self.lbl_vault_name.setText(vault_name)
             self.load_user_settings()
+            self.reset_inactivity_timer()
             self.main_stack.fade_to_index(1)
             AuditLog.log("LOGIN", f"Accessed {vault_name}")
             self.update_log()
+            self.in_pass.clear()
+            self.in_2fa.clear()
         else:
             QMessageBox.warning(self, "Error", msg)
 
@@ -2196,9 +821,49 @@ class NDSFC_Pro(QMainWindow):
             self.watcher = None
         self.indexer = None
         self.session.destroy_session()
+        self._session_password = None
+        self.auto_lock_timer.stop()
         self.in_pass.clear()
         self.in_2fa.clear()
         self.main_stack.fade_to_index(0)
+
+    def reset_inactivity_timer(self):
+        if not self.session.is_active:
+            self.auto_lock_timer.stop()
+            return
+        minutes = self.auth.settings.get("auto_lock_minutes", 10)
+        if minutes <= 0:
+            self.auto_lock_timer.stop()
+            return
+        self.auto_lock_timer.start(int(minutes) * 60 * 1000)
+
+    def eventFilter(self, obj, event):
+        if self.session.is_active:
+            if event.type() in (
+                event.Type.MouseMove,
+                event.Type.MouseButtonPress,
+                event.Type.KeyPress,
+            ):
+                self.reset_inactivity_timer()
+        return super().eventFilter(obj, event)
+
+    def _get_session_password(self, require_active=True):
+        if require_active and not self.session.is_active:
+            QMessageBox.warning(self, "Error", "No active session.")
+            return None
+        if self._session_password:
+            return self._session_password
+
+        pwd, ok = QInputDialog.getText(
+            self,
+            "Unlock Vault",
+            "Enter vault password to continue:",
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok or not pwd:
+            return None
+        self._session_password = pwd
+        return pwd
 
     def run_encrypt(self):
         count = self.file_table.rowCount()
@@ -2207,42 +872,78 @@ class NDSFC_Pro(QMainWindow):
             QMessageBox.warning(self, "No Files", "Please add files to encrypt.")
             return
 
-        # Map UI selection to mode
-        mode_map = {
-            "Standard (ChaCha20)": "standard",
-            "AES-SIV (Anti-Replay)": "siv",
-            "Blowfish (CTR)": "blowfish",
-            "CAST5 (CTR)": "cast",
-            "Post-Quantum (Cascade)": "pqc",
+        algo_map = {
+            "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
+            "AES-256-GCM (Balanced)": "aes-256-gcm",
+            "PQC Hybrid (Kyber)": "pqc-hybrid",
         }
-        mode = mode_map.get(self.crypto_mode.currentText(), "standard")
-        pwd = self.in_pass.text()  # Using login pass for demo
+        algo = algo_map.get(self.crypto_mode.currentText(), "chacha20-poly1305")
+        pwd = self._get_session_password()
+        if not pwd:
+            return
 
-        self.worker = TaskWorker(self._encrypt_task, files, pwd, mode)
+        compress = self.chk_compress.isChecked()
+        pqc_pub = None
+        pqc_kem = "kyber512"
+        if algo == "pqc-hybrid":
+            if not self.auth.settings.get("pqc_enabled", False):
+                QMessageBox.warning(self, "Error", "PQC Hybrid is disabled in settings.")
+                return
+            pqc_kem = self.auth.settings.get("pqc_kem", "kyber512")
+            if not self.auth.ensure_pqc_keys(pwd):
+                QMessageBox.warning(self, "Error", "PQC keys unavailable.")
+                return
+            pqc_pub = self.auth.get_pqc_public_key()
+            if not pqc_pub:
+                QMessageBox.warning(self, "Error", "PQC public key missing.")
+                return
+
+        self.worker = TaskWorker(
+            self._encrypt_task, files, pwd, algo, compress, pqc_pub, pqc_kem
+        )
         self.worker.finished.connect(self.on_task_done)
         self.worker.start()
 
-    def _encrypt_task(self, files, pwd, mode):
+    def _encrypt_task(self, files, pwd, algo, compress, pqc_pub, pqc_kem):
+        errors = []
         for f in files:
-            ok, out_path = CryptoEngine.encrypt_advanced(f, pwd, mode)
-            if ok and self.indexer:
-                self.indexer.add_file(out_path, mode)
+            ok, out_path = CryptoEngine.encrypt_file(
+                f, pwd, algo, pqc_public_key=pqc_pub, pqc_kem=pqc_kem, compress=compress
+            )
+            if ok:
+                if self.indexer:
+                    self.indexer.add_file(out_path, algo)
+            else:
+                errors.append(out_path)
 
             if self.chk_shred.isChecked():
                 Shredder.wipe_file(f)
+        if errors:
+            raise RuntimeError(f"Encryption failed: {errors[0]}")
         return "Encryption Complete"
 
     def run_decrypt(self):
         count = self.file_table.rowCount()
         files = [self.file_table.item(i, 2).text() for i in range(count)]
-        pwd = self.in_pass.text()
-        self.worker = TaskWorker(self._decrypt_task, files, pwd)
+        if not files:
+            QMessageBox.warning(self, "No Files", "Please add files to decrypt.")
+            return
+        pwd = self._get_session_password()
+        if not pwd:
+            return
+        pqc_priv = self.auth.get_pqc_private_key()
+        self.worker = TaskWorker(self._decrypt_task, files, pwd, pqc_priv)
         self.worker.finished.connect(self.on_task_done)
         self.worker.start()
 
-    def _decrypt_task(self, files, pwd):
+    def _decrypt_task(self, files, pwd, pqc_priv):
+        errors = []
         for f in files:
-            CryptoEngine.decrypt_advanced(f, pwd)
+            ok, msg = CryptoEngine.decrypt_file(f, pwd, pqc_private_key=pqc_priv)
+            if not ok:
+                errors.append(msg)
+        if errors:
+            raise RuntimeError(f"Decryption failed: {errors[0]}")
         return "Decryption Complete"
 
     def on_task_done(self, res):
@@ -2276,38 +977,122 @@ class NDSFC_Pro(QMainWindow):
                 if idx >= 0:
                     self.set_theme.setCurrentIndex(idx)
 
-    def apply_theme(self, theme_name):
-        new_style = self.theme_manager.apply_theme_to_stylesheet(STYLESHEET, theme_name)
+    def apply_theme(self, theme_name=None, mode=None):
+        if not mode:
+            mode = getattr(self, "current_theme_mode", "light")
+        if not theme_name:
+            theme_name = getattr(self, "current_theme_name", "Noxium Teal")
+
+        self.current_theme_mode = mode
+        self.current_theme_name = theme_name
+
+        palette = self.theme_manager.get_palette(mode, theme_name)
+        styles.apply_palette(palette)
         app = QApplication.instance()
         if app:
-            app.setStyleSheet(new_style)
+            app.setStyleSheet(styles.build_stylesheet())
+        if hasattr(self, "dash_stack"):
+            self.set_nav_active(self.dash_stack.currentIndex())
 
     def save_settings(self):
-        algo = self.set_algo.currentText()
+        algo_text = self.set_algo.currentText()
+        algo_map = {
+            "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
+            "AES-256-GCM (Balanced)": "aes-256-gcm",
+            "PQC Hybrid (Kyber)": "pqc-hybrid",
+        }
+        algo = algo_map.get(algo_text, "chacha20-poly1305")
+        compress = self.chk_default_compress.isChecked()
         shred = self.set_shred.value()
-        theme = self.set_theme.currentText()
+        auto_lock = self.set_auto_lock.value()
+        theme_mode = self.set_theme_mode.currentText().lower()
+        theme_name = self.set_theme.currentText()
+        pqc_enabled = self.chk_pqc_enable.isChecked()
+        pqc_kem = self.set_pqc_kem.currentText()
 
-        pwd = self.in_pass.text()
+        pwd = self._get_session_password()
         if not pwd:
-            QMessageBox.warning(
-                self, "Error", "Password required to update settings (Session Expired?)"
-            )
+            QMessageBox.warning(self, "Error", "Password required to update settings.")
             return
 
-        self.auth.update_setting("algo", algo, pwd)
-        self.auth.update_setting("shred", shred, pwd)
-        self.auth.update_setting("theme", theme, pwd)
+        if pqc_enabled:
+            if not self.auth.ensure_pqc_keys(pwd):
+                QMessageBox.warning(self, "Error", "PQC keys unavailable.")
+                pqc_enabled = False
+                self.chk_pqc_enable.setChecked(False)
 
-        self.apply_theme(theme)
+        self.auth.update_setting("file_algo", algo, pwd)
+        self.auth.update_setting("file_compress", compress, pwd)
+        self.auth.update_setting("shred", shred, pwd)
+        self.auth.update_setting("auto_lock_minutes", auto_lock, pwd)
+        self.auth.update_setting("theme_mode", theme_mode, pwd)
+        self.auth.update_setting("theme_name", theme_name, pwd)
+        self.auth.update_setting("pqc_enabled", pqc_enabled, pwd)
+        self.auth.update_setting("pqc_kem", pqc_kem, pwd)
+
+        if self.watcher:
+            self.watcher.mode = algo
+            self.watcher.compress = compress
+            self.watcher.pqc_kem = pqc_kem
+            self.watcher.pqc_public_key = self.auth.get_pqc_public_key() if pqc_enabled else None
+
+        self.apply_theme(theme_name, theme_mode)
+        self.reset_inactivity_timer()
 
         QMessageBox.information(
-            self, "Saved", f"Configuration updated.\nTheme set to {theme}"
+            self, "Saved", f"Configuration updated.\nTheme set to {theme_name}"
         )
 
     def load_user_settings(self):
         s = self.auth.settings
+        algo = s.get("file_algo")
+        if algo:
+            reverse_map = {
+                "chacha20-poly1305": "ChaCha20-Poly1305 (Fast)",
+                "aes-256-gcm": "AES-256-GCM (Balanced)",
+                "pqc-hybrid": "PQC Hybrid (Kyber)",
+            }
+            label = reverse_map.get(algo, "")
+            idx = self.set_algo.findText(label)
+            if idx >= 0:
+                self.set_algo.setCurrentIndex(idx)
+            if hasattr(self, "crypto_mode") and label:
+                idx = self.crypto_mode.findText(label)
+                if idx >= 0:
+                    self.crypto_mode.setCurrentIndex(idx)
+
+        if "file_compress" in s:
+            self.chk_default_compress.setChecked(bool(s["file_compress"]))
+            if hasattr(self, "chk_compress"):
+                self.chk_compress.setChecked(bool(s["file_compress"]))
+
         if "shred" in s:
             self.set_shred.setValue(s["shred"])
+
+        if "auto_lock_minutes" in s:
+            self.set_auto_lock.setValue(int(s["auto_lock_minutes"]))
+
+        if "theme_mode" in s:
+            mode = s["theme_mode"].capitalize()
+            idx = self.set_theme_mode.findText(mode)
+            if idx >= 0:
+                self.set_theme_mode.setCurrentIndex(idx)
+
+        theme = s.get("theme_name") or s.get("theme")
+        if theme:
+            idx = self.set_theme.findText(theme)
+            if idx >= 0:
+                self.set_theme.setCurrentIndex(idx)
+            self.apply_theme(theme, s.get("theme_mode", "light"))
+
+        if "pqc_enabled" in s:
+            self.chk_pqc_enable.setChecked(bool(s["pqc_enabled"]))
+
+        if "pqc_kem" in s:
+            idx = self.set_pqc_kem.findText(s["pqc_kem"])
+            if idx >= 0:
+                self.set_pqc_kem.setCurrentIndex(idx)
+        self.reset_inactivity_timer()
 
     def open_stego_tool(self):
         dlg = StartStegoDialog(self)
@@ -2323,13 +1108,23 @@ class NDSFC_Pro(QMainWindow):
 
     def open_notes(self):
         # Pass current vault credentials
-        vault_name = self.cb_vaults.currentText()
-        pwd = self.in_pass.text()
+        vault_name = self.session.current_vault or self.cb_vaults.currentText()
+        if not vault_name:
+            QMessageBox.warning(self, "Error", "No active vault.")
+            return
+        pwd = self._get_session_password()
         if not pwd:
             QMessageBox.warning(self, "Error", "Session locked or password missing.")
             return
 
-        dlg = NotesDialog(self, vault_name, pwd)
+        dlg = NotesDialog(self, vault_name, pwd, vault_key=self.auth.vault_key)
+        dlg.exec()
+
+    def open_recovery_shares(self):
+        if not self.auth.vault_key:
+            QMessageBox.warning(self, "Error", "Vault key unavailable.")
+            return
+        dlg = RecoveryDialog(self, vault_key=self.auth.vault_key)
         dlg.exec()
 
     def open_folder_watcher(self):
@@ -2399,6 +1194,6 @@ def main():
     app = QApplication(sys.argv)
     w = NDSFC_Pro()
     # Apply global font to QDialogs too
-    app.setStyleSheet(STYLESHEET)
+    app.setStyleSheet(styles.build_stylesheet())
     w.show()
     sys.exit(app.exec())

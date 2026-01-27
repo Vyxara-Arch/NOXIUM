@@ -1,232 +1,464 @@
 import os
 import struct
 import hashlib
-from Crypto.Cipher import ChaCha20_Poly1305, AES, Blowfish, CAST
+import hmac
+import zlib
+import base64
+from typing import Optional
+
+from Crypto.Cipher import ChaCha20_Poly1305, AES
 from Crypto.Random import get_random_bytes
 from Crypto.Protocol.KDF import scrypt
-from core.shredder import Shredder
+from argon2.low_level import hash_secret_raw, Type
+
+
+try:
+    from pqcrypto.kem import kyber512, kyber768, kyber1024
+
+    _PQC_KEMS = {
+        "kyber512": kyber512,
+        "kyber768": kyber768,
+        "kyber1024": kyber1024,
+    }
+    _PQC_ORDER = ["kyber512", "kyber768", "kyber1024"]
+    HAS_PQC = True
+except Exception:
+    _PQC_KEMS = {}
+    _PQC_ORDER = []
+    HAS_PQC = False
 
 
 class CryptoEngine:
+    FILE_MAGIC = b"NFX1"
+    FILE_VERSION = 1
+
+    DATA_MAGIC = b"NDSB"
+    DATA_VERSION = 1
+
+    KEY_MAGIC = b"NDSK"
+    KEY_VERSION = 1
+
     MAGIC_STD = b"NDS1"
     MAGIC_PQC = b"NDSQ"
     MAGIC_SIV = b"NDS3"
     MAGIC_BLF = b"NDS4"
     MAGIC_CST = b"NDS5"
 
-    @staticmethod
-    def derive_key(password: str, salt: bytes, length=32) -> bytes:
-        return scrypt(password.encode(), salt, length, N=2**15, r=8, p=1)
+    ALG_CHACHA20 = 1
+    ALG_AESGCM = 2
+    ALG_PQC_HYBRID = 3
+
+    KDF_ARGON2ID = 1
+
+    FLAG_COMPRESS = 1
+    FLAG_PQC = 2
+
+    DEFAULT_MEM_KIB = 65536
+    DEFAULT_TIME_COST = 3
+    DEFAULT_PARALLELISM = 2
+
+    ENCRYPTED_EXT = ".ndsfc"
 
     @staticmethod
-    def encrypt_advanced(input_path, password, mode):
-        """
-        mode: 'standard', 'pqc', 'siv', 'blowfish', 'cast'
-        """
-        salt = get_random_bytes(16)
-        out_path = input_path + ".ndsfc"
-        key = CryptoEngine.derive_key(password, salt, 32)
+    def pqc_available() -> bool:
+        return HAS_PQC
 
-        final_magic = b""
-        nonce = b""
-        tag = b""
-        ciphertext = b""
+    @staticmethod
+    def pqc_kem_names() -> list[str]:
+        return [name for name in _PQC_ORDER if name in _PQC_KEMS]
+
+    @staticmethod
+    def _get_kem(kem_name: str):
+        kem = _PQC_KEMS.get(kem_name)
+        if not kem:
+            raise ValueError("Unsupported PQC KEM")
+        return kem
+
+    @staticmethod
+    def _kem_keypair(kem_name: str) -> tuple[bytes, bytes]:
+        kem = CryptoEngine._get_kem(kem_name)
+        if hasattr(kem, "generate_keypair"):
+            return kem.generate_keypair()
+        if hasattr(kem, "keypair"):
+            return kem.keypair()
+        raise ValueError("PQC KEM missing keypair method")
+
+    @staticmethod
+    def _kem_encapsulate(kem_name: str, public_key: bytes) -> tuple[bytes, bytes]:
+        kem = CryptoEngine._get_kem(kem_name)
+        if hasattr(kem, "encrypt"):
+            return kem.encrypt(public_key)
+        if hasattr(kem, "encapsulate"):
+            return kem.encapsulate(public_key)
+        raise ValueError("PQC KEM missing encapsulate method")
+
+    @staticmethod
+    def _kem_decapsulate(kem_name: str, private_key: bytes, ciphertext: bytes) -> bytes:
+        kem = CryptoEngine._get_kem(kem_name)
+        if hasattr(kem, "decrypt"):
+            return kem.decrypt(private_key, ciphertext)
+        if hasattr(kem, "decapsulate"):
+            return kem.decapsulate(private_key, ciphertext)
+        raise ValueError("PQC KEM missing decapsulate method")
+
+    @staticmethod
+    def generate_pqc_keypair(kem_name: str) -> tuple[str, str]:
+        if not HAS_PQC:
+            raise RuntimeError("PQC library not available")
+        pub, priv = CryptoEngine._kem_keypair(kem_name)
+        return (
+            base64.b64encode(pub).decode("ascii"),
+            base64.b64encode(priv).decode("ascii"),
+        )
+
+    @staticmethod
+    def decode_pqc_key(b64_value: str) -> bytes:
+        return base64.b64decode(b64_value.encode("ascii"))
+
+    @staticmethod
+    def derive_key_argon2id(
+        password: str,
+        salt: bytes,
+        length: int = 32,
+        mem_kib: int = DEFAULT_MEM_KIB,
+        time_cost: int = DEFAULT_TIME_COST,
+        parallelism: int = DEFAULT_PARALLELISM,
+    ) -> bytes:
+        return hash_secret_raw(
+            password.encode("utf-8"),
+            salt,
+            time_cost=time_cost,
+            memory_cost=mem_kib,
+            parallelism=parallelism,
+            hash_len=length,
+            type=Type.ID,
+        )
+
+    @staticmethod
+    def derive_key_scrypt(password: str, salt: bytes, length: int = 32) -> bytes:
+        return scrypt(password.encode("utf-8"), salt, length, N=2**15, r=8, p=1)
+
+    @staticmethod
+    def _hkdf_extract(salt: bytes, ikm: bytes) -> bytes:
+        return hmac.new(salt, ikm, hashlib.sha256).digest()
+
+    @staticmethod
+    def _hkdf_expand(prk: bytes, info: bytes, length: int) -> bytes:
+        out = b""
+        counter = 1
+        last = b""
+        while len(out) < length:
+            last = hmac.new(prk, last + info + bytes([counter]), hashlib.sha256).digest()
+            out += last
+            counter += 1
+        return out[:length]
+
+    @staticmethod
+    def _hkdf(ikm: bytes, salt: bytes = b"", info: bytes = b"", length: int = 32) -> bytes:
+        if not salt:
+            salt = b"\x00" * 32
+        prk = CryptoEngine._hkdf_extract(salt, ikm)
+        return CryptoEngine._hkdf_expand(prk, info, length)
+
+    @staticmethod
+    def _build_header(
+        alg_id: int,
+        flags: int,
+        salt: bytes,
+        mem_kib: int,
+        time_cost: int,
+        parallelism: int,
+        nonce_len: int,
+        tag_len: int,
+        kem_id: Optional[int] = None,
+        kem_ct: Optional[bytes] = None,
+    ) -> bytes:
+        base = struct.pack(
+            ">4sBBBB16sIIBBB",
+            CryptoEngine.FILE_MAGIC,
+            CryptoEngine.FILE_VERSION,
+            alg_id,
+            CryptoEngine.KDF_ARGON2ID,
+            flags,
+            salt,
+            mem_kib,
+            time_cost,
+            parallelism,
+            nonce_len,
+            tag_len,
+        )
+        if kem_id is None or kem_ct is None:
+            return base
+        if len(kem_ct) > 65535:
+            raise ValueError("KEM ciphertext too large")
+        return base + struct.pack(">BH", kem_id, len(kem_ct)) + kem_ct
+
+    @staticmethod
+    def _parse_header(data: bytes) -> tuple[dict, int]:
+        if len(data) < 35:
+            raise ValueError("Invalid file header")
+        (
+            magic,
+            version,
+            alg_id,
+            kdf_id,
+            flags,
+            salt,
+            mem_kib,
+            time_cost,
+            parallelism,
+            nonce_len,
+            tag_len,
+        ) = struct.unpack(">4sBBBB16sIIBBB", data[:35])
+        if magic != CryptoEngine.FILE_MAGIC:
+            raise ValueError("Unknown file magic")
+        if version != CryptoEngine.FILE_VERSION:
+            raise ValueError("Unsupported file version")
+        offset = 35
+        kem_id = None
+        kem_ct = None
+        if flags & CryptoEngine.FLAG_PQC:
+            if len(data) < offset + 3:
+                raise ValueError("Invalid PQC header")
+            kem_id, kem_len = struct.unpack(">BH", data[offset : offset + 3])
+            offset += 3
+            kem_ct = data[offset : offset + kem_len]
+            if len(kem_ct) != kem_len:
+                raise ValueError("Invalid KEM ciphertext")
+            offset += kem_len
+        return (
+            {
+                "alg_id": alg_id,
+                "kdf_id": kdf_id,
+                "flags": flags,
+                "salt": salt,
+                "mem_kib": mem_kib,
+                "time_cost": time_cost,
+                "parallelism": parallelism,
+                "nonce_len": nonce_len,
+                "tag_len": tag_len,
+                "kem_id": kem_id,
+                "kem_ct": kem_ct,
+            },
+            offset,
+        )
+
+    @staticmethod
+    def encrypt_file(
+        input_path: str,
+        password: str,
+        algo: str,
+        pqc_public_key: Optional[bytes] = None,
+        pqc_kem: str = "kyber512",
+        compress: bool = False,
+    ) -> tuple[bool, str]:
+        if not os.path.exists(input_path):
+            return False, "Input file missing"
 
         with open(input_path, "rb") as f:
             plaintext = f.read()
 
-        if mode == "pqc":
-            # === QUANTUM RESISTANT CASCADE ===
-            # Layer 1: AES-256-GCM
-            final_magic = CryptoEngine.MAGIC_PQC
-            cipher1 = AES.new(key, AES.MODE_GCM)  # key is 32 bytes
-            temp_cipher, tag1 = cipher1.encrypt_and_digest(plaintext)
+        flags = 0
+        if compress:
+            plaintext = zlib.compress(plaintext)
+            flags |= CryptoEngine.FLAG_COMPRESS
 
-            # Layer 2: ChaCha20 (Key derived via SHA3-512)
-            try:
-                key2 = hashlib.sha3_512(key).digest()[:32]
-            except AttributeError:
-                key2 = hashlib.sha512(key).digest()[:32]
+        salt = get_random_bytes(16)
+        mem_kib = CryptoEngine.DEFAULT_MEM_KIB
+        time_cost = CryptoEngine.DEFAULT_TIME_COST
+        parallelism = CryptoEngine.DEFAULT_PARALLELISM
 
-            cipher2 = ChaCha20_Poly1305.new(key=key2)
-            final_cipher, tag2 = cipher2.encrypt_and_digest(
-                temp_cipher + tag1 + cipher1.nonce
-            )
+        base_key = CryptoEngine.derive_key_argon2id(
+            password,
+            salt,
+            length=32,
+            mem_kib=mem_kib,
+            time_cost=time_cost,
+            parallelism=parallelism,
+        )
 
-            nonce = cipher2.nonce
-            tag = tag2
-            ciphertext = final_cipher
+        alg_map = {
+            "chacha20-poly1305": CryptoEngine.ALG_CHACHA20,
+            "aes-256-gcm": CryptoEngine.ALG_AESGCM,
+            "pqc-hybrid": CryptoEngine.ALG_PQC_HYBRID,
+        }
+        alg_id = alg_map.get(algo)
+        if not alg_id:
+            return False, "Unsupported algorithm"
 
-        elif mode == "siv":
-            # === AES-SIV (RFC 5297) ===
-            final_magic = CryptoEngine.MAGIC_SIV
-            # SIV keys are doubled (Encryption + Auth), so requires 32 or 64 bytes.
-            # If we provide 32 bytes, it splits into 16+16 (AES-128).
-            # If we provide 64 bytes, it splits into 32+32 (AES-256).
-            # We want AES-256 strength, so we need 64 bytes.
-            key_siv = CryptoEngine.derive_key(password, salt, 64)
-            cipher = AES.new(key_siv, AES.MODE_SIV)
-            ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-            nonce = (
-                cipher.nonce
-            )  # SIV generates a synthetic IV usually included in ciphertext or tag handling
-            # PyCryptodome SIV: encrypt_and_digest returns (ciphertext, tag).
-            # Nonce is optional input. If not provided, it's deterministic.
-            # To be safe against identical files, we should use a nonce.
-            # Wait, SIV mode in PyCryptodome doesn't let you just "get" a random nonce if you didn't set one?
-            # Correct. SIV is deterministic. We must supply a nonce/component to randomize.
-            # We will use 'nonce' field to store a random component passed as associated data or nonce?
-            # AES SIV takes nonce kwarg.
-            siv_nonce = get_random_bytes(16)
-            cipher = AES.new(key_siv, AES.MODE_SIV, nonce=siv_nonce)
-            ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-            nonce = siv_nonce
+        kem_id = None
+        kem_ct = None
+        final_key = base_key
 
-        elif mode == "blowfish":
-            # === BLOWFISH-CTR ===
-            final_magic = CryptoEngine.MAGIC_BLF
-            cipher = Blowfish.new(key, Blowfish.MODE_CTR)  # 32 byte key OK
-            ciphertext = cipher.encrypt(plaintext)
-            nonce = cipher.nonce  # 8 bytes usually
-            tag = b""  # No tag in CTR
+        if alg_id == CryptoEngine.ALG_PQC_HYBRID:
+            if not HAS_PQC:
+                return False, "PQC library not available"
+            if not pqc_public_key:
+                return False, "PQC public key required"
+            if pqc_kem not in CryptoEngine.pqc_kem_names():
+                return False, "Unsupported PQC KEM"
+            kem_id = CryptoEngine.pqc_kem_names().index(pqc_kem) + 1
+            kem_ct, shared = CryptoEngine._kem_encapsulate(pqc_kem, pqc_public_key)
+            final_key = CryptoEngine._hkdf(base_key + shared, salt, b"noxium-pqc", 32)
+            flags |= CryptoEngine.FLAG_PQC
 
-        elif mode == "cast":
-            # === CAST5-CTR ===
-            final_magic = CryptoEngine.MAGIC_CST
-            # CAST5 max key 16 bytes (128 bits)
-            key_cast = key[:16]
-            cipher = CAST.new(key_cast, CAST.MODE_CTR)
-            ciphertext = cipher.encrypt(plaintext)
-            nonce = cipher.nonce  # 8 bytes
-            tag = b""
+        nonce = get_random_bytes(12)
+        tag_len = 16
+        header = CryptoEngine._build_header(
+            alg_id,
+            flags,
+            salt,
+            mem_kib,
+            time_cost,
+            parallelism,
+            len(nonce),
+            tag_len,
+            kem_id=kem_id,
+            kem_ct=kem_ct,
+        )
 
+        if alg_id == CryptoEngine.ALG_AESGCM:
+            cipher = AES.new(final_key, AES.MODE_GCM, nonce=nonce)
         else:
-            # === STANDARD (ChaCha20) ===
-            final_magic = CryptoEngine.MAGIC_STD
-            cipher = ChaCha20_Poly1305.new(key=key)
-            ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-            nonce = cipher.nonce
+            cipher = ChaCha20_Poly1305.new(key=final_key, nonce=nonce)
 
-        # Write
+        cipher.update(header)
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+
+        out_path = input_path + CryptoEngine.ENCRYPTED_EXT
         with open(out_path, "wb") as f:
-            f.write(final_magic)  # 4
-            f.write(salt)  # 16
-
-            # Standardization of Nonce/Tag lengths in header?
-            # STD: Nonce(8/12), Tag(16)
-            # SIV: Nonce(16), Tag(16)
-            # BLF: Nonce(8), Tag(0)
-            # CST: Nonce(8), Tag(0)
-            # To make reading easier, we should write lengths or stick to fixed if implied by Magic.
-            # Old code just wrote nonce/tag directly. 'decrypt' knew the lengths.
-            # ChaCha: 12 bytes nonce (usually), 16 tag.
-            # AES-GCM (PQC inner): 16 nonce, 16 tag.
-            # Let's write strict lengths.
-
-            f.write(struct.pack("B", len(nonce)))
+            f.write(header)
             f.write(nonce)
-            f.write(struct.pack("B", len(tag)))
             f.write(tag)
             f.write(ciphertext)
 
         return True, out_path
 
     @staticmethod
-    def decrypt_advanced(input_path, password):
+    def decrypt_file(
+        input_path: str,
+        password: str,
+        pqc_private_key: Optional[bytes] = None,
+    ) -> tuple[bool, str]:
+        if not os.path.exists(input_path):
+            return False, "Input file missing"
+
+        with open(input_path, "rb") as f:
+            raw = f.read()
+
+        if len(raw) < 4:
+            return False, "Invalid file"
+
+        if raw[:4] != CryptoEngine.FILE_MAGIC:
+            return CryptoEngine._decrypt_legacy(input_path, password)
+
+        try:
+            header, offset = CryptoEngine._parse_header(raw)
+        except Exception as e:
+            return False, f"Header error: {e}"
+
+        nonce_end = offset + header["nonce_len"]
+        tag_end = nonce_end + header["tag_len"]
+        if tag_end > len(raw):
+            return False, "Invalid payload"
+
+        nonce = raw[offset:nonce_end]
+        tag = raw[nonce_end:tag_end]
+        ciphertext = raw[tag_end:]
+
+        base_key = CryptoEngine.derive_key_argon2id(
+            password,
+            header["salt"],
+            length=32,
+            mem_kib=header["mem_kib"],
+            time_cost=header["time_cost"],
+            parallelism=header["parallelism"],
+        )
+
+        final_key = base_key
+        if header["flags"] & CryptoEngine.FLAG_PQC:
+            if not pqc_private_key:
+                return False, "PQC private key required"
+            kem_id = header["kem_id"]
+            if kem_id is None:
+                return False, "Missing PQC metadata"
+            kem_names = CryptoEngine.pqc_kem_names()
+            if kem_id - 1 >= len(kem_names):
+                return False, "Unknown PQC KEM"
+            kem_name = kem_names[kem_id - 1]
+            shared = CryptoEngine._kem_decapsulate(
+                kem_name, pqc_private_key, header["kem_ct"]
+            )
+            final_key = CryptoEngine._hkdf(
+                base_key + shared, header["salt"], b"noxium-pqc", 32
+            )
+
+        if header["alg_id"] == CryptoEngine.ALG_AESGCM:
+            cipher = AES.new(final_key, AES.MODE_GCM, nonce=nonce)
+        else:
+            cipher = ChaCha20_Poly1305.new(key=final_key, nonce=nonce)
+
+        header_bytes = raw[:offset]
+        cipher.update(header_bytes)
+        try:
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+        except Exception as e:
+            return False, f"Decryption Error: {e}"
+
+        if header["flags"] & CryptoEngine.FLAG_COMPRESS:
+            try:
+                plaintext = zlib.decompress(plaintext)
+            except Exception as e:
+                return False, f"Decompression Error: {e}"
+
+        out_path = input_path.replace(CryptoEngine.ENCRYPTED_EXT, "")
+        with open(out_path, "wb") as f:
+            f.write(plaintext)
+
+        return True, out_path
+
+    @staticmethod
+    def _decrypt_legacy(input_path: str, password: str) -> tuple[bool, str]:
         try:
             with open(input_path, "rb") as f:
                 magic = f.read(4)
                 salt = f.read(16)
 
-                # Check for old/legacy formats if needed
-                # But we are rewriting mostly.
-                # Assuming new format for new magics.
-                # Old MAGIC_STD didn't use length prefixes!
-                # We need to handle Magic detection carefully.
+                key = CryptoEngine.derive_key_scrypt(password, salt, 32)
 
-                is_legacy = magic == b"NDS1" or magic == b"NDSQ"
-                # Wait, if I change NDS1 format, old files break.
-                # I should use NEW magics for new formats? NDS1 is taken.
-                # Or handle reading differently based on magic.
-
-                if magic == b"NDS1" or magic == b"NDSQ":
-                    # Use LEGACY read path (no length prefixes) or update NDS1 to use prefixes?
-                    # The user has existing files? "Projects/Gitdesktop" implies dev environment.
-                    # Safe assumption: We can migrate or just keep old read logic for NDS1/Q.
-                    # But I updated 'encrypt' to use headers for everything.
-                    # I should probably use b"NDS6" for "New Standard".
-                    # OR just implement specific readers.
-                    pass
-
-                # Parsing new structure
-                # We need to distinguish between Old NDS1 and New NDS1?
-                # I'll stick to specific readers for Magics.
-
-                if (
-                    magic == CryptoEngine.MAGIC_STD
-                ):  # Old Format Handler (No length bytes) | Or New?
-                    # Previous implementation: NDS1 + 16 salt + 12 nonce + 16 tag + data.
-                    # My new implementation wrote len bytes. This BREAKS compatibility if I reuse NDS1.
-                    # I will use NDSv2 -> NDS6 for Standard to be clean.
-                    # Or revert to implicit lengths for NDS1.
-                    # Let's revert to implicit lengths for NDS1 to maintain compatibility or simple structure.
-                    # ChaCha: 12 nonce, 16 tag.
-                    # SIV: 16 nonce, 16 tag.
-                    # Blow: 8 nonce, 0 tag.
-                    # Cast: 8 nonce, 0 tag.
-
-                    # I'll read specific lengths based on Magic.
-                    pass
-
-                key = CryptoEngine.derive_key(password, salt, 32)
-
-                if magic == CryptoEngine.MAGIC_SIV:  # NDS3
+                if magic == CryptoEngine.MAGIC_SIV:
                     n_len = struct.unpack("B", f.read(1))[0]
                     nonce = f.read(n_len)
                     t_len = struct.unpack("B", f.read(1))[0]
                     tag = f.read(t_len)
                     ciphertext = f.read()
 
-                    key_siv = CryptoEngine.derive_key(password, salt, 64)
+                    key_siv = CryptoEngine.derive_key_scrypt(password, salt, 64)
                     cipher = AES.new(key_siv, AES.MODE_SIV, nonce=nonce)
                     plaintext = cipher.decrypt_and_verify(ciphertext, tag)
 
-                elif magic == CryptoEngine.MAGIC_BLF:  # NDS4
+                elif magic == CryptoEngine.MAGIC_BLF:
                     n_len = struct.unpack("B", f.read(1))[0]
                     nonce = f.read(n_len)
-                    f.read(1)  # Skip tag len (0)
+                    f.read(1)
                     ciphertext = f.read()
+                    from Crypto.Cipher import Blowfish
 
                     cipher = Blowfish.new(key, Blowfish.MODE_CTR, nonce=nonce)
                     plaintext = cipher.decrypt(ciphertext)
 
-                elif magic == CryptoEngine.MAGIC_CST:  # NDS5
+                elif magic == CryptoEngine.MAGIC_CST:
                     n_len = struct.unpack("B", f.read(1))[0]
                     nonce = f.read(n_len)
-                    f.read(1)  # Skip tag len 0
+                    f.read(1)
                     ciphertext = f.read()
+                    from Crypto.Cipher import CAST
 
                     key_cast = key[:16]
                     cipher = CAST.new(key_cast, CAST.MODE_CTR, nonce=nonce)
                     plaintext = cipher.decrypt(ciphertext)
 
-                elif (
-                    magic == CryptoEngine.MAGIC_PQC
-                ):  # NDSQ (Re-implemented clean with headers?)
-                    # If I change PQC write format, I break old PQC.
-                    # I will assume "Modify PQC" means "New PQC files use new format/algo".
-                    # I'll enable length headers for consistency in new files.
-                    # But wait, 'encrypt_advanced' writes lengths now.
-                    # I must handle reading logic match.
-                    # If NDSQ is found, check if it fits old structure or new?
-                    # Old: Nonce(12), Tag(16).
-                    # New PQC: Nonce(12), Tag(16) but I put length bytes.
-                    # Since I am "Overhauling", I will assume we can break format or I must check.
-                    # I'll just use explicit reading for NDSQ assuming NEW format. Old format files might fail.
-                    # To be safe, I will use a different Magic for the NEW PQC? b"NDS7"?
-                    # Or just rely on the fact the user probably has no important files yet.
-                    # I'll stick to matching the WRITE format.
-
+                elif magic == CryptoEngine.MAGIC_PQC:
                     n_len = struct.unpack("B", f.read(1))[0]
                     nonce = f.read(n_len)
                     t_len = struct.unpack("B", f.read(1))[0]
@@ -235,25 +467,19 @@ class CryptoEngine:
 
                     try:
                         key2 = hashlib.sha3_512(key).digest()[:32]
-                    except:
+                    except Exception:
                         key2 = hashlib.sha512(key).digest()[:32]
 
                     cipher2 = ChaCha20_Poly1305.new(key=key2, nonce=nonce)
                     inner = cipher2.decrypt_and_verify(ciphertext, tag)
 
-                    # Inner: AES GCM
-                    # Extract
                     aes_nonce = inner[-16:]
                     aes_tag = inner[-32:-16]
                     aes_cipher = inner[:-32]
                     cipher1 = AES.new(key, AES.MODE_GCM, nonce=aes_nonce)
                     plaintext = cipher1.decrypt_and_verify(aes_cipher, aes_tag)
 
-                elif magic == CryptoEngine.MAGIC_STD:  # NDS1
-                    # New format has length bytes.
-                    # Old didn't.
-                    # I'll implement "Try Read Length" heuristic?
-                    # Or just assume new format for now.
+                elif magic == CryptoEngine.MAGIC_STD:
                     n_len = struct.unpack("B", f.read(1))[0]
                     nonce = f.read(n_len)
                     t_len = struct.unpack("B", f.read(1))[0]
@@ -264,22 +490,20 @@ class CryptoEngine:
                     plaintext = cipher.decrypt_and_verify(ciphertext, tag)
 
                 else:
-                    return False, "Unknown/Legacy File Format"
+                    return False, "Unknown legacy format"
 
-            # Save
-            out_path = input_path.replace(".ndsfc", "")
+            out_path = input_path.replace(CryptoEngine.ENCRYPTED_EXT, "")
             with open(out_path, "wb") as f:
                 f.write(plaintext)
             return True, out_path
 
         except Exception as e:
-            return False, f"Decryption Error: {str(e)}"
+            return False, f"Legacy Decryption Error: {e}"
 
     @staticmethod
     def data_encrypt(data: bytes, password: str) -> dict:
-        """Encrypts bytes in memory using ChaCha20-Poly1305. Returns dict with hex-encoded artifacts."""
         salt = get_random_bytes(16)
-        key = CryptoEngine.derive_key(password, salt)
+        key = CryptoEngine.derive_key_scrypt(password, salt)
         cipher = ChaCha20_Poly1305.new(key=key)
         ciphertext, tag = cipher.encrypt_and_digest(data)
 
@@ -292,15 +516,140 @@ class CryptoEngine:
 
     @staticmethod
     def data_decrypt(enc_dict: dict, password: str) -> bytes:
-        """Decrypts data from dictionary artifacts."""
         try:
             salt = bytes.fromhex(enc_dict["salt"])
             nonce = bytes.fromhex(enc_dict["nonce"])
             tag = bytes.fromhex(enc_dict["tag"])
             ciphertext = bytes.fromhex(enc_dict["ciphertext"])
 
-            key = CryptoEngine.derive_key(password, salt)
+            key = CryptoEngine.derive_key_scrypt(password, salt)
             cipher = ChaCha20_Poly1305.new(key=key, nonce=nonce)
             return cipher.decrypt_and_verify(ciphertext, tag)
         except (ValueError, KeyError):
             raise ValueError("Decryption Failed")
+
+    @staticmethod
+    def data_encrypt_blob(data: bytes, password: str) -> bytes:
+        salt = get_random_bytes(16)
+        key = CryptoEngine.derive_key_scrypt(password, salt)
+        cipher = ChaCha20_Poly1305.new(key=key)
+        ciphertext, tag = cipher.encrypt_and_digest(data)
+        nonce = cipher.nonce
+
+        if len(nonce) > 255 or len(tag) > 255:
+            raise ValueError("Nonce/Tag length overflow")
+
+        return b"".join(
+            [
+                CryptoEngine.DATA_MAGIC,
+                bytes([CryptoEngine.DATA_VERSION]),
+                salt,
+                bytes([len(nonce)]),
+                nonce,
+                bytes([len(tag)]),
+                tag,
+                ciphertext,
+            ]
+        )
+
+    @staticmethod
+    def data_decrypt_blob(blob: bytes, password: str) -> bytes:
+        if len(blob) < 4 + 1 + 16 + 1 + 1:
+            raise ValueError("Invalid blob length")
+
+        magic = blob[:4]
+        version = blob[4]
+        if magic != CryptoEngine.DATA_MAGIC or version != CryptoEngine.DATA_VERSION:
+            raise ValueError("Unknown blob format")
+
+        offset = 5
+        salt = blob[offset : offset + 16]
+        offset += 16
+
+        n_len = blob[offset]
+        offset += 1
+        nonce = blob[offset : offset + n_len]
+        offset += n_len
+
+        t_len = blob[offset]
+        offset += 1
+        tag = blob[offset : offset + t_len]
+        offset += t_len
+
+        ciphertext = blob[offset:]
+
+        key = CryptoEngine.derive_key_scrypt(password, salt)
+        cipher = ChaCha20_Poly1305.new(key=key, nonce=nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag)
+
+    @staticmethod
+    def data_encrypt_key_blob(data: bytes, key: bytes) -> bytes:
+        cipher = ChaCha20_Poly1305.new(key=key)
+        ciphertext, tag = cipher.encrypt_and_digest(data)
+        nonce = cipher.nonce
+
+        if len(nonce) > 255 or len(tag) > 255:
+            raise ValueError("Nonce/Tag length overflow")
+
+        return b"".join(
+            [
+                CryptoEngine.KEY_MAGIC,
+                bytes([CryptoEngine.KEY_VERSION]),
+                bytes([len(nonce)]),
+                nonce,
+                bytes([len(tag)]),
+                tag,
+                ciphertext,
+            ]
+        )
+
+    @staticmethod
+    def data_decrypt_key_blob(blob: bytes, key: bytes) -> bytes:
+        if len(blob) < 4 + 1 + 1 + 1:
+            raise ValueError("Invalid key blob length")
+
+        magic = blob[:4]
+        version = blob[4]
+        if magic != CryptoEngine.KEY_MAGIC or version != CryptoEngine.KEY_VERSION:
+            raise ValueError("Unknown key blob format")
+
+        offset = 5
+        n_len = blob[offset]
+        offset += 1
+        nonce = blob[offset : offset + n_len]
+        offset += n_len
+
+        t_len = blob[offset]
+        offset += 1
+        tag = blob[offset : offset + t_len]
+        offset += t_len
+
+        ciphertext = blob[offset:]
+
+        cipher = ChaCha20_Poly1305.new(key=key, nonce=nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag)
+
+    @staticmethod
+    def encrypt_advanced(input_path, password, mode, compress=False, pqc_public_key=None, pqc_kem="kyber512"):
+        mode_map = {
+            "standard": "chacha20-poly1305",
+            "siv": "aes-256-gcm",
+            "blowfish": "aes-256-gcm",
+            "cast": "aes-256-gcm",
+            "pqc": "pqc-hybrid",
+        }
+        algo = mode_map.get(mode, "chacha20-poly1305")
+        return CryptoEngine.encrypt_file(
+            input_path,
+            password,
+            algo,
+            pqc_public_key=pqc_public_key,
+            pqc_kem=pqc_kem,
+            compress=compress,
+        )
+
+    @staticmethod
+    def decrypt_advanced(input_path, password, pqc_private_key=None):
+        return CryptoEngine.decrypt_file(
+            input_path, password, pqc_private_key=pqc_private_key
+        )

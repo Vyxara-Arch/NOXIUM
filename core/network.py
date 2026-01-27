@@ -1,22 +1,19 @@
 import paramiko
-import socks  # Vyx , "pip install PySocks 1.7.1"
+import socks
 import socket
+import os
 
 
 class GhostLink:
     def __init__(self):
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
-        self.client.load_system_host_keys()
-
-        # Helper to load user host keys safely
-        import os
 
         known_hosts = os.path.expanduser("~/.ssh/known_hosts")
         if os.path.exists(known_hosts):
             try:
                 self.client.load_host_keys(known_hosts)
-            except:
+            except Exception:
                 pass
         self.sftp = None
         self.transport = None
@@ -32,7 +29,6 @@ class GhostLink:
         proxy_port=None,
     ):
         try:
-            # Socket Settings. (PySocks Integration 08.01 by MXT)
             sock = None
             if proxy_host and proxy_port:
                 sock = socks.socksocket()

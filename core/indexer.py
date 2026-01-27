@@ -3,13 +3,15 @@ import json
 import os
 import uuid
 from datetime import datetime
+
 from core.crypto_engine import CryptoEngine
 
 
 class IndexManager:
-    def __init__(self, vault_name, password):
+    def __init__(self, vault_name, password=None, vault_key=None):
         self.vault_name = vault_name
         self.password = password
+        self.vault_key = vault_key
         self.index_path = os.path.join("vaults", vault_name, "index.db.enc")
 
         self.conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -44,7 +46,6 @@ class IndexManager:
         fid = str(uuid.uuid4())
         name = os.path.basename(path)
 
-        # Check if already exists by path
         self.cursor.execute("SELECT id FROM files WHERE path = ?", (path,))
         if self.cursor.fetchone():
             return
@@ -69,7 +70,7 @@ class IndexManager:
 
         for root, dirs, files in os.walk(directory):
             for f in files:
-                if f.endswith(".ndsfc"):
+                if f.endswith(CryptoEngine.ENCRYPTED_EXT):
                     self.add_file(os.path.join(root, f), "Encrypted")
         self.save_index()
 
@@ -77,7 +78,6 @@ class IndexManager:
         if not query:
             self.cursor.execute("SELECT * FROM files ORDER BY c_time DESC")
         else:
-            # Fuzzy-ish search using FTS or LIKE
             self.cursor.execute(
                 "SELECT * FROM files WHERE filename LIKE ?", (f"%{query}%",)
             )
@@ -88,8 +88,6 @@ class IndexManager:
         ]
 
     def save_index(self):
-        # Dump DB to JSON -> Encrypt -> Save
-        # Minimal dump: list of dicts
         self.cursor.execute("SELECT * FROM files")
         rows = self.cursor.fetchall()
         data = [
@@ -97,11 +95,14 @@ class IndexManager:
             for r in rows
         ]
 
-        json_bytes = json.dumps(data).encode()
+        json_bytes = json.dumps(data).encode("utf-8")
         try:
-            # Use data_encrypt (memory)
-            enc_dict = CryptoEngine.data_encrypt(json_bytes, self.password)
-            final_data = json.dumps(enc_dict).encode()
+            if self.vault_key:
+                final_data = CryptoEngine.data_encrypt_key_blob(json_bytes, self.vault_key)
+            else:
+                if not self.password:
+                    raise ValueError("Password required")
+                final_data = CryptoEngine.data_encrypt_blob(json_bytes, self.password)
 
             with open(self.index_path, "wb") as f:
                 f.write(final_data)
@@ -116,9 +117,21 @@ class IndexManager:
             with open(self.index_path, "rb") as f:
                 raw = f.read()
 
-            enc_dict = json.loads(raw.decode())
-            plain_bytes = CryptoEngine.data_decrypt(enc_dict, self.password)
-            data = json.loads(plain_bytes.decode())
+            if raw.startswith(CryptoEngine.KEY_MAGIC):
+                if not self.vault_key:
+                    raise ValueError("Vault key required")
+                plain_bytes = CryptoEngine.data_decrypt_key_blob(raw, self.vault_key)
+            elif raw.startswith(CryptoEngine.DATA_MAGIC):
+                if not self.password:
+                    raise ValueError("Password required")
+                plain_bytes = CryptoEngine.data_decrypt_blob(raw, self.password)
+            else:
+                enc_dict = json.loads(raw.decode("utf-8"))
+                if not self.password:
+                    raise ValueError("Password required")
+                plain_bytes = CryptoEngine.data_decrypt(enc_dict, self.password)
+
+            data = json.loads(plain_bytes.decode("utf-8"))
 
             for d in data:
                 self.cursor.execute(
@@ -145,4 +158,3 @@ class IndexManager:
             self.conn.commit()
         except Exception as e:
             print(f"Index Load Error: {e}")
-            # Reset if corrupt?

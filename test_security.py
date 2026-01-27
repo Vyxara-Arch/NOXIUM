@@ -1,6 +1,5 @@
 import sys
 import os
-import json
 import shutil
 
 sys.path.append(os.getcwd())
@@ -35,17 +34,17 @@ def test_security():
 
     # 2. Verify File Content (Should NOT have totp_secret in plaintext)
     print(f"[2] Inspecting Vault File: {path}")
-    with open(path, "r") as f:
+    with open(path, "rb") as f:
         content = f.read()
 
-    if totp_secret in content:
+    if totp_secret.encode("utf-8") in content:
         print("CRITICAL FAIL: TOTP Secret found in plaintext in vault file!")
         return False
     else:
         print("PASS: TOTP Secret is NOT visible in plaintext.")
 
-    if "vault_data" not in content:
-        print("FAIL: 'vault_data' field missing.")
+    if not content.startswith(b"NVLT"):
+        print("FAIL: Vault binary magic not found.")
         return False
 
     # 3. Test Login Success
@@ -65,8 +64,8 @@ def test_security():
         return False
 
     # 4. Test Settings Load
-    if "algo" in am.settings:
-        print(f"PASS: Settings loaded correctly ({am.settings['algo']})")
+    if "file_algo" in am.settings:
+        print(f"PASS: Settings loaded correctly ({am.settings['file_algo']})")
     else:
         print("FAIL: Settings not loaded.")
         return False

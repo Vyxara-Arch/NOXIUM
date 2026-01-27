@@ -2,17 +2,18 @@ import os
 import json
 import time
 from datetime import datetime
+
 from core.crypto_engine import CryptoEngine
 
 
 class NotesManager:
-
-    def __init__(self, vault_name):
+    def __init__(self, vault_name, vault_key=None):
         self.vault_name = vault_name
+        self.vault_key = vault_key
         self.notes_dir = os.path.join("vaults", vault_name, "notes")
         os.makedirs(self.notes_dir, exist_ok=True)
 
-    def create_note(self, title, content, password):
+    def create_note(self, title, content, password=None):
         note_id = str(int(time.time() * 1000))
         note_data = {
             "id": note_id,
@@ -22,11 +23,8 @@ class NotesManager:
             "modified": datetime.now().isoformat(),
         }
 
-        note_json = json.dumps(note_data).encode()
-        encrypted_dict = CryptoEngine.data_encrypt(note_json, password)
-
-        # Serialize encryption artifacts to JSON bytes
-        final_data = json.dumps(encrypted_dict).encode()
+        note_json = json.dumps(note_data).encode("utf-8")
+        final_data = self._encrypt_payload(note_json, password)
 
         note_path = os.path.join(self.notes_dir, f"{note_id}.note")
         with open(note_path, "wb") as f:
@@ -34,7 +32,7 @@ class NotesManager:
 
         return note_id
 
-    def get_note(self, note_id, password):
+    def get_note(self, note_id, password=None):
         note_path = os.path.join(self.notes_dir, f"{note_id}.note")
 
         if not os.path.exists(note_path):
@@ -44,17 +42,13 @@ class NotesManager:
             with open(note_path, "rb") as f:
                 file_content = f.read()
 
-            # Load encryption artifacts
-            encrypted_dict = json.loads(file_content.decode())
-
-            decrypted = CryptoEngine.data_decrypt(encrypted_dict, password)
-            note_data = json.loads(decrypted.decode())
+            decrypted = self._decrypt_payload(file_content, password)
+            note_data = json.loads(decrypted.decode("utf-8"))
             return note_data
-        except Exception as e:
-            # print(f"Error decrypting note: {e}")
+        except Exception:
             return None
 
-    def update_note(self, note_id, title, content, password):
+    def update_note(self, note_id, title, content, password=None):
         existing = self.get_note(note_id, password)
         if not existing:
             return False
@@ -67,10 +61,8 @@ class NotesManager:
             "modified": datetime.now().isoformat(),
         }
 
-        # Encrypt and save
-        note_json = json.dumps(note_data).encode()
-        encrypted_dict = CryptoEngine.data_encrypt(note_json, password)
-        final_data = json.dumps(encrypted_dict).encode()
+        note_json = json.dumps(note_data).encode("utf-8")
+        final_data = self._encrypt_payload(note_json, password)
 
         note_path = os.path.join(self.notes_dir, f"{note_id}.note")
         with open(note_path, "wb") as f:
@@ -79,7 +71,6 @@ class NotesManager:
         return True
 
     def delete_note(self, note_id):
-        """Delete a note"""
         note_path = os.path.join(self.notes_dir, f"{note_id}.note")
         if os.path.exists(note_path):
             os.remove(note_path)
@@ -104,7 +95,7 @@ class NotesManager:
 
         return sorted(notes, key=lambda x: x["id"], reverse=True)
 
-    def search_notes(self, query, password):
+    def search_notes(self, query, password=None):
         results = []
         for note_info in self.list_notes():
             note = self.get_note(note_info["id"], password)
@@ -116,3 +107,24 @@ class NotesManager:
                     results.append(note)
 
         return results
+
+    def _encrypt_payload(self, payload: bytes, password):
+        if self.vault_key:
+            return CryptoEngine.data_encrypt_key_blob(payload, self.vault_key)
+        if not password:
+            raise ValueError("Password required")
+        return CryptoEngine.data_encrypt_blob(payload, password)
+
+    def _decrypt_payload(self, payload: bytes, password):
+        if payload.startswith(CryptoEngine.KEY_MAGIC):
+            if not self.vault_key:
+                raise ValueError("Vault key required")
+            return CryptoEngine.data_decrypt_key_blob(payload, self.vault_key)
+        if payload.startswith(CryptoEngine.DATA_MAGIC):
+            if not password:
+                raise ValueError("Password required")
+            return CryptoEngine.data_decrypt_blob(payload, password)
+        encrypted_dict = json.loads(payload.decode("utf-8"))
+        if not password:
+            raise ValueError("Password required")
+        return CryptoEngine.data_decrypt(encrypted_dict, password)
