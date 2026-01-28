@@ -49,6 +49,7 @@ class VaultManager:
                 "pqc_enabled": False,
                 "pqc_kem": default_kem,
                 "auto_lock_minutes": 10,
+                "device_lock_enabled": False,
             },
             "pqc": pqc_keys,
         }

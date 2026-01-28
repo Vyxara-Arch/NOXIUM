@@ -145,20 +145,46 @@ class AuthManager:
             return None
         return CryptoEngine.decode_pqc_key(priv)
 
-    def ensure_pqc_keys(self, password):
-        if not self.vault_content or not self.vault_key:
+    def ensure_pqc_keys(self, password, kem_name=None):
+        if not self.vault_content:
             return False
         if not CryptoEngine.pqc_available():
             return False
+
+        if not self.vault_key and self.active_vault_path:
+            try:
+                data = VaultStorage.read_vault(self.active_vault_path)
+            except Exception:
+                data = None
+            if data and (
+                data.get("format") == "legacy_json"
+                or data.get("version") == VaultStorage.VERSION_V1
+            ):
+                new_path, new_key = self._migrate_to_v2(
+                    data, self.vault_content, password, self.vault_key
+                )
+                if new_path:
+                    self.active_vault_path = new_path
+                    self.vault_key = new_key
+            if not self.vault_key:
+                return False
+
         pub, priv, kem = self.get_pqc_material()
-        if pub and priv:
+        target_kem = kem_name or kem or "kyber512"
+
+        if not pub or not priv or kem != target_kem:
+            try:
+                pub, priv = CryptoEngine.generate_pqc_keypair(target_kem)
+            except Exception:
+                return False
+            self.vault_content["pqc"] = {
+                "kem": target_kem,
+                "public": pub,
+                "private": priv,
+            }
+        else:
             return True
-        kem_name = kem or "kyber512"
-        try:
-            pub, priv = CryptoEngine.generate_pqc_keypair(kem_name)
-        except Exception:
-            return False
-        self.vault_content["pqc"] = {"kem": kem_name, "public": pub, "private": priv}
+
         vault_blob = CryptoEngine.data_encrypt_key_blob(
             json.dumps(self.vault_content).encode("utf-8"), self.vault_key
         )
@@ -276,6 +302,10 @@ class AuthManager:
 
         if "auto_lock_minutes" not in settings:
             settings["auto_lock_minutes"] = 10
+            changed = True
+
+        if "device_lock_enabled" not in settings:
+            settings["device_lock_enabled"] = False
             changed = True
 
         if "shred" not in settings and "shred_passes" in settings:

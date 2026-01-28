@@ -3,21 +3,22 @@ ACCENT_SECONDARY = "#f59e0b"
 ACCENT_TERTIARY = "#0ea5a4"
 ACCENT_SOFT = "rgba(15, 118, 110, 0.12)"
 ACCENT_SOFT_BORDER = "rgba(15, 118, 110, 0.2)"
-BG_COLOR = "#f8f6f2"
-BG_GRADIENT_START = "#f9f7f3"
-BG_GRADIENT_END = "#e9f1ea"
+BG_COLOR = "#f4f7fb"
+BG_GRADIENT_START = "#f4f7fb"
+BG_GRADIENT_END = "#e9eef5"
 CARD_COLOR = "rgba(255, 255, 255, 0.92)"
 CARD_HOVER = "rgba(255, 255, 255, 0.98)"
-GLASS_BORDER = "rgba(17, 24, 39, 0.08)"
-TEXT_COLOR = "#111827"
-TEXT_MUTED = "#6b7280"
+GLASS_BORDER = "rgba(15, 23, 42, 0.08)"
+TEXT_COLOR = "#0f172a"
+TEXT_MUTED = "#64748b"
 SHADOW_COLOR = "rgba(15, 23, 42, 0.08)"
-DIALOG_BG = "#f7f5f1"
-FIELD_BG = "#ffffff"
+DIALOG_BG = "#f1f5f9"
+FIELD_BG = "rgba(255, 255, 255, 0.95)"
 SURFACE_BG = "#ffffff"
-SIDEBAR_BG = "rgba(255, 255, 255, 0.78)"
+SIDEBAR_BG = "rgba(255, 255, 255, 0.82)"
 TABLE_HEADER_BG = "rgba(15, 23, 42, 0.04)"
 TABLE_GRID = "rgba(15, 23, 42, 0.08)"
+TABLE_ALT_BG = "rgba(15, 23, 42, 0.02)"
 
 
 def apply_palette(palette):
@@ -41,6 +42,7 @@ def apply_palette(palette):
     global SIDEBAR_BG
     global TABLE_HEADER_BG
     global TABLE_GRID
+    global TABLE_ALT_BG
 
     ACCENT_COLOR = palette["accent"]
     ACCENT_SECONDARY = palette["secondary"]
@@ -60,49 +62,54 @@ def apply_palette(palette):
     SIDEBAR_BG = palette.get("sidebar_bg", SIDEBAR_BG)
     TABLE_HEADER_BG = palette.get("table_header_bg", TABLE_HEADER_BG)
     TABLE_GRID = palette.get("table_grid", TABLE_GRID)
+    TABLE_ALT_BG = palette.get("table_alt_bg", TABLE_ALT_BG)
 
 
 def build_stylesheet():
     return f"""
 QMainWindow {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {BG_GRADIENT_START}, stop:1 {BG_GRADIENT_END});
+        stop:0 {BG_GRADIENT_START}, stop:0.65 {BG_GRADIENT_END}, stop:1 {ACCENT_SOFT});
 }}
 
 QWidget#LoginPage {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {BG_GRADIENT_START}, stop:1 {BG_GRADIENT_END});
+        stop:0 {BG_GRADIENT_START}, stop:0.7 {BG_GRADIENT_END}, stop:1 {ACCENT_SOFT});
 }}
 
 QWidget {{
     color: {TEXT_COLOR};
-    font-family: 'Manrope', 'IBM Plex Sans', 'Segoe UI', sans-serif;
-    font-size: 13px;
+    font-family: 'Sora', 'Manrope', 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', sans-serif;
+    font-size: 14px;
     font-weight: 400;
 }}
 
 QFrame#Card {{
-    background: {CARD_COLOR};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {CARD_COLOR}, stop:1 {SURFACE_BG});
     border: 1px solid {GLASS_BORDER};
-    border-radius: 16px;
+    border-radius: 18px;
 }}
 
 QFrame#Card:hover {{
     background: {CARD_HOVER};
+    border: 1px solid {ACCENT_SOFT_BORDER};
 }}
 
 QFrame#Panel {{
-    background: {CARD_COLOR};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {CARD_COLOR}, stop:1 {SURFACE_BG});
     border: 1px solid {GLASS_BORDER};
-    border-radius: 20px;
+    border-radius: 24px;
 }}
 
 QFrame#Sidebar {{
-    background: {SIDEBAR_BG};
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {SIDEBAR_BG}, stop:1 {BG_GRADIENT_END});
     border-right: 1px solid {GLASS_BORDER};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
+QLineEdit, QComboBox, QSpinBox, QTextEdit {{
     background: {FIELD_BG};
     border: 1px solid {GLASS_BORDER};
     border-radius: 12px;
@@ -112,18 +119,19 @@ QLineEdit, QComboBox, QSpinBox {{
     selection-background-color: {ACCENT_COLOR};
 }}
 
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
-    border: 2px solid {ACCENT_COLOR};
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus {{
+    border: 1px solid {ACCENT_COLOR};
     background: {FIELD_BG};
 }}
 
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QTextEdit:hover {{
     border: 1px solid {ACCENT_SOFT_BORDER};
 }}
 
 QLineEdit#SearchField {{
     border-radius: 999px;
-    padding: 8px 16px;
+    padding: 9px 16px;
+    background: {SURFACE_BG};
 }}
 
 QComboBox::drop-down {{
@@ -149,7 +157,7 @@ QComboBox QAbstractItemView {{
 }}
 
 QPushButton {{
-    background: {FIELD_BG};
+    background: {SURFACE_BG};
     border: 1px solid {GLASS_BORDER};
     border-radius: 12px;
     padding: 10px 16px;
@@ -157,10 +165,12 @@ QPushButton {{
     font-weight: 600;
     font-size: 13px;
     text-align: center;
+    min-height: 36px;
 }}
 
 QPushButton:hover {{
     background: rgba(15, 23, 42, 0.04);
+    border: 1px solid {ACCENT_SOFT_BORDER};
 }}
 
 QPushButton:pressed {{
@@ -168,14 +178,16 @@ QPushButton:pressed {{
 }}
 
 QPushButton#Primary {{
-    background: {ACCENT_COLOR};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {ACCENT_COLOR}, stop:1 {ACCENT_TERTIARY});
     color: #ffffff;
     font-weight: 700;
     border: none;
 }}
 
 QPushButton#Primary:hover {{
-    background: #0b5f59;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {ACCENT_TERTIARY}, stop:1 {ACCENT_COLOR});
 }}
 
 QPushButton#Secondary {{
@@ -186,18 +198,20 @@ QPushButton#Secondary {{
 }}
 
 QPushButton#Secondary:hover {{
-    background: #f2b84b;
+    background: #f7c45a;
 }}
 
 QPushButton#Danger {{
-    background: #ef4444;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #ef4444, stop:1 #b91c1c);
     color: #ffffff;
     font-weight: 700;
     border: none;
 }}
 
 QPushButton#Danger:hover {{
-    background: #dc2626;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #f05252, stop:1 #991b1b);
 }}
 
 QPushButton#LinkButton {{
@@ -213,11 +227,12 @@ QPushButton#LinkButton:hover {{
 
 QPushButton[nav="true"] {{
     text-align: left;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 12px;
     color: {TEXT_MUTED};
     background: transparent;
     border: 1px solid transparent;
+    font-weight: 600;
 }}
 
 QPushButton[nav="true"]:hover {{
@@ -229,6 +244,7 @@ QPushButton[nav="true"][active="true"] {{
     background: {ACCENT_SOFT};
     color: {ACCENT_COLOR};
     border: 1px solid {ACCENT_SOFT_BORDER};
+    border-left: 3px solid {ACCENT_COLOR};
 }}
 
 QCheckBox {{
@@ -254,7 +270,7 @@ QProgressBar {{
     border: none;
     background: {GLASS_BORDER};
     border-radius: 8px;
-    height: 12px;
+    height: 10px;
     text-align: center;
 }}
 
@@ -317,7 +333,7 @@ QTabBar::tab {{
     color: {TEXT_MUTED};
     padding: 10px 20px;
     margin-right: 4px;
-    border-radius: 10px 10px 0 0;
+    border-radius: 12px 12px 0 0;
     font-weight: 600;
 }}
 
@@ -334,14 +350,6 @@ QToolTip {{
     border-radius: 8px;
     padding: 6px 10px;
     font-size: 12px;
-}}
-
-QTextEdit {{
-    background: {FIELD_BG};
-    border: 1px solid {GLASS_BORDER};
-    border-radius: 12px;
-    padding: 12px;
-    color: {TEXT_COLOR};
 }}
 
 QGroupBox {{
@@ -380,6 +388,8 @@ QTableWidget {{
     border: 1px solid {GLASS_BORDER};
     color: {TEXT_COLOR};
     gridline-color: {TABLE_GRID};
+    alternate-background-color: {TABLE_ALT_BG};
+    border-radius: 12px;
 }}
 
 QTableWidget::item:selected {{
@@ -390,8 +400,9 @@ QTableWidget::item:selected {{
 QHeaderView::section {{
     background: {TABLE_HEADER_BG};
     color: {TEXT_MUTED};
-    padding: 6px;
+    padding: 8px;
     border: none;
+    font-weight: 600;
 }}
 
 QTableWidget#DropTable {{

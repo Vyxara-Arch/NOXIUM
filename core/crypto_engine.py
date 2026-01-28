@@ -11,7 +11,10 @@ from Crypto.Random import get_random_bytes
 from Crypto.Protocol.KDF import scrypt
 from argon2.low_level import hash_secret_raw, Type
 
+from core.device_lock import get_device_fingerprint
 
+
+_PQC_ERROR = None
 try:
     from pqcrypto.kem import kyber512, kyber768, kyber1024
 
@@ -22,10 +25,11 @@ try:
     }
     _PQC_ORDER = ["kyber512", "kyber768", "kyber1024"]
     HAS_PQC = True
-except Exception:
+except Exception as e:
     _PQC_KEMS = {}
     _PQC_ORDER = []
     HAS_PQC = False
+    _PQC_ERROR = str(e) or "pqcrypto import failed"
 
 
 class CryptoEngine:
@@ -47,11 +51,19 @@ class CryptoEngine:
     ALG_CHACHA20 = 1
     ALG_AESGCM = 2
     ALG_PQC_HYBRID = 3
+    ALG_LETNOX_256 = 4
+    ALG_LETNOX_512 = 5
 
     KDF_ARGON2ID = 1
 
     FLAG_COMPRESS = 1
     FLAG_PQC = 2
+    FLAG_DEVICE = 4
+
+    LETNOX_MAGIC = b"LNXC"
+    LETNOX_VERSION = 1
+    LETNOX_HASH_SHA256 = 1
+    LETNOX_HASH_SHA512 = 2
 
     DEFAULT_MEM_KIB = 65536
     DEFAULT_TIME_COST = 3
@@ -62,6 +74,12 @@ class CryptoEngine:
     @staticmethod
     def pqc_available() -> bool:
         return HAS_PQC
+
+    @staticmethod
+    def pqc_status() -> tuple[bool, str]:
+        if HAS_PQC:
+            return True, "PQC available"
+        return False, _PQC_ERROR or "PQC unavailable"
 
     @staticmethod
     def pqc_kem_names() -> list[str]:
@@ -161,6 +179,47 @@ class CryptoEngine:
         return CryptoEngine._hkdf_expand(prk, info, length)
 
     @staticmethod
+    def _letnox_wrap(data: bytes, variant: int) -> bytes:
+        if variant == 256:
+            digest = hashlib.sha256(data).digest()
+            algo = CryptoEngine.LETNOX_HASH_SHA256
+        elif variant == 512:
+            digest = hashlib.sha512(data).digest()
+            algo = CryptoEngine.LETNOX_HASH_SHA512
+        else:
+            raise ValueError("Unsupported LetNox variant")
+        return data + CryptoEngine.LETNOX_MAGIC + bytes([CryptoEngine.LETNOX_VERSION, algo]) + digest
+
+    @staticmethod
+    def _letnox_unwrap(data: bytes, variant: int) -> bytes:
+        if variant == 256:
+            digest_len = 32
+            algo = CryptoEngine.LETNOX_HASH_SHA256
+            hasher = hashlib.sha256
+        elif variant == 512:
+            digest_len = 64
+            algo = CryptoEngine.LETNOX_HASH_SHA512
+            hasher = hashlib.sha512
+        else:
+            raise ValueError("Unsupported LetNox variant")
+
+        meta_len = len(CryptoEngine.LETNOX_MAGIC) + 2 + digest_len
+        if len(data) < meta_len:
+            raise ValueError("Missing LetNox integrity tag")
+        meta = data[-meta_len:]
+        if meta[: len(CryptoEngine.LETNOX_MAGIC)] != CryptoEngine.LETNOX_MAGIC:
+            raise ValueError("LetNox tag not found")
+        version = meta[len(CryptoEngine.LETNOX_MAGIC)]
+        algo_id = meta[len(CryptoEngine.LETNOX_MAGIC) + 1]
+        if version != CryptoEngine.LETNOX_VERSION or algo_id != algo:
+            raise ValueError("LetNox tag mismatch")
+        digest = meta[len(CryptoEngine.LETNOX_MAGIC) + 2 :]
+        payload = data[:-meta_len]
+        if digest != hasher(payload).digest():
+            raise ValueError("LetNox integrity check failed")
+        return payload
+
+    @staticmethod
     def _build_header(
         alg_id: int,
         flags: int,
@@ -251,6 +310,7 @@ class CryptoEngine:
         pqc_public_key: Optional[bytes] = None,
         pqc_kem: str = "kyber512",
         compress: bool = False,
+        device_lock: bool = False,
     ) -> tuple[bool, str]:
         if not os.path.exists(input_path):
             return False, "Input file missing"
@@ -281,6 +341,8 @@ class CryptoEngine:
             "chacha20-poly1305": CryptoEngine.ALG_CHACHA20,
             "aes-256-gcm": CryptoEngine.ALG_AESGCM,
             "pqc-hybrid": CryptoEngine.ALG_PQC_HYBRID,
+            "letnox-256": CryptoEngine.ALG_LETNOX_256,
+            "letnox-512": CryptoEngine.ALG_LETNOX_512,
         }
         alg_id = alg_map.get(algo)
         if not alg_id:
@@ -289,6 +351,7 @@ class CryptoEngine:
         kem_id = None
         kem_ct = None
         final_key = base_key
+        device_binding = None
 
         if alg_id == CryptoEngine.ALG_PQC_HYBRID:
             if not HAS_PQC:
@@ -301,6 +364,19 @@ class CryptoEngine:
             kem_ct, shared = CryptoEngine._kem_encapsulate(pqc_kem, pqc_public_key)
             final_key = CryptoEngine._hkdf(base_key + shared, salt, b"noxium-pqc", 32)
             flags |= CryptoEngine.FLAG_PQC
+        elif alg_id in (CryptoEngine.ALG_LETNOX_256, CryptoEngine.ALG_LETNOX_512):
+            variant = 256 if alg_id == CryptoEngine.ALG_LETNOX_256 else 512
+            plaintext = CryptoEngine._letnox_wrap(plaintext, variant)
+
+        if device_lock:
+            try:
+                device_binding = get_device_fingerprint()
+            except Exception:
+                return False, "Device lock unavailable"
+            final_key = CryptoEngine._hkdf(
+                final_key + device_binding, salt, b"noxium-device", 32
+            )
+            flags |= CryptoEngine.FLAG_DEVICE
 
         nonce = get_random_bytes(12)
         tag_len = 16
@@ -393,6 +469,15 @@ class CryptoEngine:
                 base_key + shared, header["salt"], b"noxium-pqc", 32
             )
 
+        if header["flags"] & CryptoEngine.FLAG_DEVICE:
+            try:
+                device_binding = get_device_fingerprint()
+            except Exception:
+                return False, "Device lock unavailable"
+            final_key = CryptoEngine._hkdf(
+                final_key + device_binding, header["salt"], b"noxium-device", 32
+            )
+
         if header["alg_id"] == CryptoEngine.ALG_AESGCM:
             cipher = AES.new(final_key, AES.MODE_GCM, nonce=nonce)
         else:
@@ -404,6 +489,16 @@ class CryptoEngine:
             plaintext = cipher.decrypt_and_verify(ciphertext, tag)
         except Exception as e:
             return False, f"Decryption Error: {e}"
+
+        if header["alg_id"] in (
+            CryptoEngine.ALG_LETNOX_256,
+            CryptoEngine.ALG_LETNOX_512,
+        ):
+            variant = 256 if header["alg_id"] == CryptoEngine.ALG_LETNOX_256 else 512
+            try:
+                plaintext = CryptoEngine._letnox_unwrap(plaintext, variant)
+            except Exception as e:
+                return False, f"LetNox Integrity Error: {e}"
 
         if header["flags"] & CryptoEngine.FLAG_COMPRESS:
             try:
@@ -630,13 +725,23 @@ class CryptoEngine:
         return cipher.decrypt_and_verify(ciphertext, tag)
 
     @staticmethod
-    def encrypt_advanced(input_path, password, mode, compress=False, pqc_public_key=None, pqc_kem="kyber512"):
+    def encrypt_advanced(
+        input_path,
+        password,
+        mode,
+        compress=False,
+        pqc_public_key=None,
+        pqc_kem="kyber512",
+        device_lock=False,
+    ):
         mode_map = {
             "standard": "chacha20-poly1305",
             "siv": "aes-256-gcm",
             "blowfish": "aes-256-gcm",
             "cast": "aes-256-gcm",
             "pqc": "pqc-hybrid",
+            "letnox256": "letnox-256",
+            "letnox512": "letnox-512",
         }
         algo = mode_map.get(mode, "chacha20-poly1305")
         return CryptoEngine.encrypt_file(
@@ -646,6 +751,7 @@ class CryptoEngine:
             pqc_public_key=pqc_public_key,
             pqc_kem=pqc_kem,
             compress=compress,
+            device_lock=device_lock,
         )
 
     @staticmethod

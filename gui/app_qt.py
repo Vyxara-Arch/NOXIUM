@@ -59,6 +59,7 @@ class NDSFC_Pro(QMainWindow):
         super().__init__()
         self.setWindowTitle("NDSFC | GitHub : MintyExtremum & Vyxara-Arch")
         self.resize(1150, 750)
+        self.setMinimumSize(980, 640)
 
         self.vault_mgr = VaultManager()
         self.auth = AuthManager()
@@ -104,7 +105,8 @@ class NDSFC_Pro(QMainWindow):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QFrame(objectName="Panel")
-        card.setFixedSize(420, 520)
+        card.setMinimumSize(420, 520)
+        card.setMaximumWidth(560)
 
         cl = QVBoxLayout(card)
         cl.setContentsMargins(40, 50, 40, 50)
@@ -129,7 +131,7 @@ class NDSFC_Pro(QMainWindow):
 
         # Inputs
         self.cb_vaults = QComboBox()
-        self.cb_vaults.setFixedHeight(45)
+        self.cb_vaults.setMinimumHeight(45)
         self.refresh_vaults()
 
         self.in_pass = QLineEdit(placeholderText="Access Key")
@@ -146,7 +148,7 @@ class NDSFC_Pro(QMainWindow):
 
         # Login Button
         btn_login = QPushButton("SIGN IN", objectName="Primary")
-        btn_login.setFixedHeight(50)
+        btn_login.setMinimumHeight(50)
         btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_login.clicked.connect(self.do_login)
         cl.addWidget(btn_login)
@@ -182,9 +184,12 @@ class NDSFC_Pro(QMainWindow):
         row = QHBoxLayout(w)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(0)
+        row.setStretch(0, 0)
+        row.setStretch(1, 1)
 
         sidebar = QFrame(objectName="Sidebar")
-        sidebar.setFixedWidth(280)
+        sidebar.setMinimumWidth(240)
+        sidebar.setMaximumWidth(320)
         sb_l = QVBoxLayout(sidebar)
         sb_l.setContentsMargins(20, 40, 20, 20)
 
@@ -260,7 +265,8 @@ class NDSFC_Pro(QMainWindow):
         # Search Bar
         self.txt_search = QLineEdit()
         self.txt_search.setPlaceholderText("Search Encrypted Index...")
-        self.txt_search.setFixedWidth(300)
+        self.txt_search.setMinimumWidth(240)
+        self.txt_search.setMaximumWidth(420)
         self.txt_search.setObjectName("SearchField")
         self.txt_search.textChanged.connect(self.do_search)
         header.addWidget(self.txt_search)
@@ -278,6 +284,9 @@ class NDSFC_Pro(QMainWindow):
 
         grid = QGridLayout()
         grid.setSpacing(20)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
 
         # 1. System Monitor (Row 0, Col 0)
         sys_mon = SystemMonitorWidget()
@@ -367,6 +376,14 @@ class NDSFC_Pro(QMainWindow):
             ["Filename", "Size", "Date", "Original Path", "Algo"]
         )
         self.table_results.horizontalHeader().setStretchLastSection(True)
+        self.table_results.setAlternatingRowColors(True)
+        self.table_results.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.table_results.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.table_results.verticalHeader().setVisible(False)
         l_results.addWidget(self.table_results)
 
         self.dash_content.addWidget(page_results)
@@ -423,10 +440,13 @@ class NDSFC_Pro(QMainWindow):
         # Grid Layout for Controls and File List
         grid = QGridLayout()
         grid.setSpacing(20)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 2)
 
         # Left Panel: Configuration
         config_card = QFrame(objectName="Card")
-        config_card.setFixedWidth(320)
+        config_card.setMinimumWidth(300)
+        config_card.setMaximumWidth(380)
         cl = QVBoxLayout(config_card)
         cl.setSpacing(15)
 
@@ -444,6 +464,8 @@ class NDSFC_Pro(QMainWindow):
             [
                 "ChaCha20-Poly1305 (Fast)",
                 "AES-256-GCM (Balanced)",
+                "LetNoxEnc-256 (Experimental)",
+                "LetNoxEnc-512 (Experimental)",
             ]
         )
         if CryptoEngine.pqc_available():
@@ -500,6 +522,11 @@ class NDSFC_Pro(QMainWindow):
         self.file_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
+        self.file_table.setAlternatingRowColors(True)
+        self.file_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.file_table.verticalHeader().setVisible(False)
         self.file_table.setAcceptDrops(True)
         self.file_table.dragEnterEvent = lambda e: e.accept()
         self.file_table.dragMoveEvent = lambda e: e.accept()
@@ -538,12 +565,12 @@ class NDSFC_Pro(QMainWindow):
 
         b_enc = QPushButton(" ENCRYPT ALL", objectName="Primary")
         b_enc.setIcon(qta.icon("fa5s.lock", color="white"))
-        b_enc.setFixedHeight(50)
+        b_enc.setMinimumHeight(50)
         b_enc.clicked.connect(self.run_encrypt)
 
         b_dec = QPushButton(" DECRYPT ALL", objectName="Secondary")
         b_dec.setIcon(qta.icon("fa5s.unlock", color=styles.TEXT_COLOR))
-        b_dec.setFixedHeight(50)
+        b_dec.setMinimumHeight(50)
         b_dec.clicked.connect(self.run_decrypt)
 
         action_row.addWidget(b_enc)
@@ -556,29 +583,79 @@ class NDSFC_Pro(QMainWindow):
     def tab_settings(self):
         p = QWidget()
         l = QVBoxLayout(p)
-        l.setContentsMargins(50, 50, 50, 50)
-        l.addWidget(
-            QLabel(
-                "Environment Settings", styleSheet="font-size: 28px; font-weight: bold;"
-            )
-        )
+        l.setContentsMargins(30, 30, 30, 30)
+        l.setSpacing(20)
 
-        form_frame = QFrame(objectName="Card")
-        fl = QFormLayout(form_frame)
-        fl.setSpacing(20)
-        fl.setContentsMargins(30, 30, 30, 30)
+        title = QLabel(
+            "Environment Settings", styleSheet="font-size: 28px; font-weight: bold;"
+        )
+        subtitle = QLabel("Manage encryption, PQC, appearance, and recovery tools.")
+        subtitle.setProperty("tone", "muted")
+        l.addWidget(title)
+        l.addWidget(subtitle)
+
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+
+        def make_card(header, helper):
+            card = QFrame(objectName="Card")
+            card_l = QVBoxLayout(card)
+            card_l.setContentsMargins(24, 24, 24, 24)
+            card_l.setSpacing(12)
+            h = QLabel(header)
+            h.setStyleSheet("font-size: 16px; font-weight: 700;")
+            card_l.addWidget(h)
+            if helper:
+                sub = QLabel(helper)
+                sub.setProperty("tone", "muted")
+                card_l.addWidget(sub)
+            form = QFormLayout()
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            form.setLabelAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            form.setHorizontalSpacing(16)
+            form.setVerticalSpacing(12)
+            card_l.addLayout(form)
+            return card, form
 
         self.set_algo = QComboBox()
         self.set_algo.addItems(
             [
                 "ChaCha20-Poly1305 (Fast)",
                 "AES-256-GCM (Balanced)",
+                "LetNoxEnc-256 (Experimental)",
+                "LetNoxEnc-512 (Experimental)",
             ]
         )
         if CryptoEngine.pqc_available():
             self.set_algo.addItem("PQC Hybrid (Kyber)")
 
         self.chk_default_compress = QCheckBox("Compress before encrypt")
+
+        self.set_theme_mode = QComboBox()
+        self.set_theme_mode.addItems(["Light", "Dark"])
+
+        self.set_theme = QComboBox()
+        self.set_theme.addItems(self.theme_manager.get_all_theme_names())
+
+        self.chk_pqc_enable = QCheckBox("Enable PQC Hybrid")
+        self.chk_pqc_enable.toggled.connect(self.update_pqc_controls)
+        self.set_pqc_kem = QComboBox()
+        kem_names = CryptoEngine.pqc_kem_names()
+        if not kem_names:
+            kem_names = ["kyber512"]
+        self.set_pqc_kem.addItems(kem_names)
+        self.lbl_pqc_status = QLabel("")
+        self.lbl_pqc_status.setProperty("tone", "muted")
+
+        if not CryptoEngine.pqc_available():
+            self.chk_pqc_enable.setEnabled(False)
+            self.set_pqc_kem.setEnabled(False)
+            self.chk_pqc_enable.setToolTip("PQC library not available on this system.")
 
         self.set_shred = QSpinBox()
         self.set_shred.setRange(1, 35)
@@ -590,48 +667,102 @@ class NDSFC_Pro(QMainWindow):
         self.set_auto_lock.setValue(10)
         self.set_auto_lock.setSuffix(" min")
 
-        self.set_theme_mode = QComboBox()
-        self.set_theme_mode.addItems(["Light", "Dark"])
-
-        self.set_theme = QComboBox()
-        self.set_theme.addItems(self.theme_manager.get_all_theme_names())
-
-        self.chk_pqc_enable = QCheckBox("Enable PQC Hybrid")
-        self.set_pqc_kem = QComboBox()
-        self.set_pqc_kem.addItems(CryptoEngine.pqc_kem_names())
-        if not CryptoEngine.pqc_available():
-            self.chk_pqc_enable.setEnabled(False)
-            self.set_pqc_kem.setEnabled(False)
+        self.chk_device_lock = QCheckBox("Bind encrypted files to this device")
+        self.chk_device_lock.setToolTip(
+            "When enabled, encrypted files can only be opened on this machine."
+        )
+        self.chk_device_lock.toggled.connect(self.on_device_lock_toggled)
 
         btn_create = QPushButton("Design Custom Theme")
         btn_create.clicked.connect(self.open_theme_creator)
 
-        btn_save = QPushButton("Save Configuration", objectName="Primary")
-        btn_save.clicked.connect(self.save_settings)
-
-        fl.addRow("Default Encryption:", self.set_algo)
-        fl.addRow("Compression:", self.chk_default_compress)
-        fl.addRow("Shredder Intensity:", self.set_shred)
-        fl.addRow("Auto-Lock:", self.set_auto_lock)
-        fl.addRow("Theme Mode:", self.set_theme_mode)
-        fl.addRow("UI Accent:", self.set_theme)
-        fl.addRow("", btn_create)
-        fl.addRow("PQC Hybrid:", self.chk_pqc_enable)
-        fl.addRow("PQC KEM:", self.set_pqc_kem)
-
         btn_export = QPushButton("Backup Vault (.vib)")
         btn_export.clicked.connect(self.do_vault_export)
-        fl.addRow("Vault Backup:", btn_export)
 
         btn_recovery = QPushButton("Generate Recovery Shares")
         btn_recovery.clicked.connect(self.open_recovery_shares)
-        fl.addRow("Recovery Kit:", btn_recovery)
 
-        fl.addRow("", btn_save)
+        btn_save = QPushButton("Save Configuration", objectName="Primary")
+        btn_save.setMinimumHeight(44)
+        btn_save.clicked.connect(self.save_settings)
 
-        l.addWidget(form_frame)
+        enc_card, enc_form = make_card(
+            "Encryption", "Default algorithm and PQC settings."
+        )
+        enc_form.addRow("Default Encryption:", self.set_algo)
+        enc_form.addRow("Compression:", self.chk_default_compress)
+        enc_form.addRow("PQC Hybrid:", self.chk_pqc_enable)
+        enc_form.addRow("PQC KEM:", self.set_pqc_kem)
+        enc_form.addRow("PQC Status:", self.lbl_pqc_status)
+
+        ui_card, ui_form = make_card("Appearance", "Theme mode and UI accents.")
+        ui_form.addRow("Theme Mode:", self.set_theme_mode)
+        ui_form.addRow("UI Accent:", self.set_theme)
+        ui_form.addRow("Custom Theme:", btn_create)
+
+        sec_card, sec_form = make_card("Security", "Auto-lock, shredding, recovery.")
+        sec_form.addRow("Shredder Intensity:", self.set_shred)
+        sec_form.addRow("Auto-Lock:", self.set_auto_lock)
+        sec_form.addRow("Device Lock:", self.chk_device_lock)
+        sec_form.addRow("Recovery Kit:", btn_recovery)
+
+        vault_card, vault_form = make_card("Backups", "Export your vault safely.")
+        vault_form.addRow("Vault Backup:", btn_export)
+
+        grid.addWidget(enc_card, 0, 0)
+        grid.addWidget(ui_card, 0, 1)
+        grid.addWidget(sec_card, 1, 0)
+        grid.addWidget(vault_card, 1, 1)
+
+        l.addLayout(grid)
         l.addStretch()
+        l.addWidget(btn_save)
+        self.update_pqc_controls()
         return p
+
+    def update_pqc_controls(self):
+        if not hasattr(self, "chk_pqc_enable"):
+            return
+        enabled = self.chk_pqc_enable.isChecked()
+        available, status = CryptoEngine.pqc_status()
+        self.set_pqc_kem.setEnabled(available and enabled)
+        if available:
+            self.lbl_pqc_status.setText("Available")
+            self.lbl_pqc_status.setToolTip("")
+        else:
+            self.lbl_pqc_status.setText("Unavailable: install pqcrypto")
+            self.lbl_pqc_status.setToolTip(status)
+
+    def on_device_lock_toggled(self, checked):
+        if not checked:
+            return
+        if getattr(self, "_device_lock_prompting", False):
+            return
+        self._device_lock_prompting = True
+        try:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Device Lock Disclaimer")
+            msg.setText("Device Lock привязывает зашифрованные файлы к этому устройству.")
+            msg.setInformativeText(
+                "Основные условия:\n"
+                "• Файлы, зашифрованные с Device Lock, не откроются на другой машине.\n"
+                "• Переустановка ОС или смена железа может привести к полной потере доступа.\n"
+                "• Отключение опции не снимает блокировку с уже зашифрованных файлов.\n"
+                "• Рекомендуется хранить резервные копии без Device Lock.\n"
+                "• Функция экспериментальная, вы используете её на свой риск."
+            )
+            accept_btn = msg.addButton(
+                "Я принимаю условия, продолжить", QMessageBox.ButtonRole.AcceptRole
+            )
+            msg.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() != accept_btn:
+                self.chk_device_lock.blockSignals(True)
+                self.chk_device_lock.setChecked(False)
+                self.chk_device_lock.blockSignals(False)
+        finally:
+            self._device_lock_prompting = False
 
     def tab_omega(self):
         p = QWidget()
@@ -643,6 +774,9 @@ class NDSFC_Pro(QMainWindow):
 
         grid = QGridLayout()
         grid.setSpacing(20)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
 
         # Card 1: Stego
         c1 = QFrame(objectName="Card")
@@ -785,9 +919,10 @@ class NDSFC_Pro(QMainWindow):
             compress = self.auth.settings.get("file_compress", False)
             pqc_enabled = self.auth.settings.get("pqc_enabled", False)
             pqc_kem = self.auth.settings.get("pqc_kem", "kyber512")
+            device_lock = self.auth.settings.get("device_lock_enabled", False)
             pqc_pub = None
             if pqc_enabled:
-                if not self.auth.ensure_pqc_keys(pwd):
+                if not self.auth.ensure_pqc_keys(pwd, kem_name=pqc_kem):
                     QMessageBox.warning(self, "Warning", "PQC keys unavailable. Falling back.")
                     pqc_enabled = False
                 pqc_pub = self.auth.get_pqc_public_key()
@@ -798,6 +933,7 @@ class NDSFC_Pro(QMainWindow):
                 compress=compress,
                 pqc_public_key=pqc_pub,
                 pqc_kem=pqc_kem,
+                device_lock=device_lock,
             )
             self.indexer = IndexManager(
                 vault_name, password=pwd, vault_key=self.auth.vault_key
@@ -876,6 +1012,8 @@ class NDSFC_Pro(QMainWindow):
             "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
             "AES-256-GCM (Balanced)": "aes-256-gcm",
             "PQC Hybrid (Kyber)": "pqc-hybrid",
+            "LetNoxEnc-256 (Experimental)": "letnox-256",
+            "LetNoxEnc-512 (Experimental)": "letnox-512",
         }
         algo = algo_map.get(self.crypto_mode.currentText(), "chacha20-poly1305")
         pwd = self._get_session_password()
@@ -883,6 +1021,7 @@ class NDSFC_Pro(QMainWindow):
             return
 
         compress = self.chk_compress.isChecked()
+        device_lock = self.auth.settings.get("device_lock_enabled", False)
         pqc_pub = None
         pqc_kem = "kyber512"
         if algo == "pqc-hybrid":
@@ -890,7 +1029,7 @@ class NDSFC_Pro(QMainWindow):
                 QMessageBox.warning(self, "Error", "PQC Hybrid is disabled in settings.")
                 return
             pqc_kem = self.auth.settings.get("pqc_kem", "kyber512")
-            if not self.auth.ensure_pqc_keys(pwd):
+            if not self.auth.ensure_pqc_keys(pwd, kem_name=pqc_kem):
                 QMessageBox.warning(self, "Error", "PQC keys unavailable.")
                 return
             pqc_pub = self.auth.get_pqc_public_key()
@@ -899,16 +1038,29 @@ class NDSFC_Pro(QMainWindow):
                 return
 
         self.worker = TaskWorker(
-            self._encrypt_task, files, pwd, algo, compress, pqc_pub, pqc_kem
+            self._encrypt_task,
+            files,
+            pwd,
+            algo,
+            compress,
+            pqc_pub,
+            pqc_kem,
+            device_lock,
         )
         self.worker.finished.connect(self.on_task_done)
         self.worker.start()
 
-    def _encrypt_task(self, files, pwd, algo, compress, pqc_pub, pqc_kem):
+    def _encrypt_task(self, files, pwd, algo, compress, pqc_pub, pqc_kem, device_lock):
         errors = []
         for f in files:
             ok, out_path = CryptoEngine.encrypt_file(
-                f, pwd, algo, pqc_public_key=pqc_pub, pqc_kem=pqc_kem, compress=compress
+                f,
+                pwd,
+                algo,
+                pqc_public_key=pqc_pub,
+                pqc_kem=pqc_kem,
+                compress=compress,
+                device_lock=device_lock,
             )
             if ok:
                 if self.indexer:
@@ -991,6 +1143,7 @@ class NDSFC_Pro(QMainWindow):
         app = QApplication.instance()
         if app:
             app.setStyleSheet(styles.build_stylesheet())
+        self.setStyleSheet(styles.build_stylesheet())
         if hasattr(self, "dash_stack"):
             self.set_nav_active(self.dash_stack.currentIndex())
 
@@ -1000,6 +1153,8 @@ class NDSFC_Pro(QMainWindow):
             "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
             "AES-256-GCM (Balanced)": "aes-256-gcm",
             "PQC Hybrid (Kyber)": "pqc-hybrid",
+            "LetNoxEnc-256 (Experimental)": "letnox-256",
+            "LetNoxEnc-512 (Experimental)": "letnox-512",
         }
         algo = algo_map.get(algo_text, "chacha20-poly1305")
         compress = self.chk_default_compress.isChecked()
@@ -1007,6 +1162,7 @@ class NDSFC_Pro(QMainWindow):
         auto_lock = self.set_auto_lock.value()
         theme_mode = self.set_theme_mode.currentText().lower()
         theme_name = self.set_theme.currentText()
+        device_lock = self.chk_device_lock.isChecked()
         pqc_enabled = self.chk_pqc_enable.isChecked()
         pqc_kem = self.set_pqc_kem.currentText()
 
@@ -1016,7 +1172,11 @@ class NDSFC_Pro(QMainWindow):
             return
 
         if pqc_enabled:
-            if not self.auth.ensure_pqc_keys(pwd):
+            if not CryptoEngine.pqc_available():
+                QMessageBox.warning(self, "Error", "PQC library not available.")
+                pqc_enabled = False
+                self.chk_pqc_enable.setChecked(False)
+            elif not self.auth.ensure_pqc_keys(pwd, kem_name=pqc_kem):
                 QMessageBox.warning(self, "Error", "PQC keys unavailable.")
                 pqc_enabled = False
                 self.chk_pqc_enable.setChecked(False)
@@ -1027,6 +1187,7 @@ class NDSFC_Pro(QMainWindow):
         self.auth.update_setting("auto_lock_minutes", auto_lock, pwd)
         self.auth.update_setting("theme_mode", theme_mode, pwd)
         self.auth.update_setting("theme_name", theme_name, pwd)
+        self.auth.update_setting("device_lock_enabled", device_lock, pwd)
         self.auth.update_setting("pqc_enabled", pqc_enabled, pwd)
         self.auth.update_setting("pqc_kem", pqc_kem, pwd)
 
@@ -1035,6 +1196,7 @@ class NDSFC_Pro(QMainWindow):
             self.watcher.compress = compress
             self.watcher.pqc_kem = pqc_kem
             self.watcher.pqc_public_key = self.auth.get_pqc_public_key() if pqc_enabled else None
+            self.watcher.device_lock = device_lock
 
         self.apply_theme(theme_name, theme_mode)
         self.reset_inactivity_timer()
@@ -1051,6 +1213,8 @@ class NDSFC_Pro(QMainWindow):
                 "chacha20-poly1305": "ChaCha20-Poly1305 (Fast)",
                 "aes-256-gcm": "AES-256-GCM (Balanced)",
                 "pqc-hybrid": "PQC Hybrid (Kyber)",
+                "letnox-256": "LetNoxEnc-256 (Experimental)",
+                "letnox-512": "LetNoxEnc-512 (Experimental)",
             }
             label = reverse_map.get(algo, "")
             idx = self.set_algo.findText(label)
@@ -1072,6 +1236,11 @@ class NDSFC_Pro(QMainWindow):
         if "auto_lock_minutes" in s:
             self.set_auto_lock.setValue(int(s["auto_lock_minutes"]))
 
+        if "device_lock_enabled" in s:
+            self.chk_device_lock.blockSignals(True)
+            self.chk_device_lock.setChecked(bool(s["device_lock_enabled"]))
+            self.chk_device_lock.blockSignals(False)
+
         if "theme_mode" in s:
             mode = s["theme_mode"].capitalize()
             idx = self.set_theme_mode.findText(mode)
@@ -1092,6 +1261,7 @@ class NDSFC_Pro(QMainWindow):
             idx = self.set_pqc_kem.findText(s["pqc_kem"])
             if idx >= 0:
                 self.set_pqc_kem.setCurrentIndex(idx)
+        self.update_pqc_controls()
         self.reset_inactivity_timer()
 
     def open_stego_tool(self):

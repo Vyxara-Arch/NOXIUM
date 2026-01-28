@@ -19,6 +19,7 @@ class FolderWatcher(QObject):
         compress=False,
         pqc_public_key=None,
         pqc_kem="kyber512",
+        device_lock=False,
     ):
         super().__init__()
         self.crypto_engine = crypto_engine
@@ -27,6 +28,7 @@ class FolderWatcher(QObject):
         self.compress = compress
         self.pqc_public_key = pqc_public_key
         self.pqc_kem = pqc_kem
+        self.device_lock = device_lock
         self.folders = set()
         self.running = False
         self.thread = None
@@ -103,6 +105,7 @@ class FolderWatcher(QObject):
                 pqc_public_key=self.pqc_public_key,
                 pqc_kem=self.pqc_kem,
                 compress=self.compress,
+                device_lock=self.device_lock,
             )
             if ok:
                 from core.shredder import Shredder

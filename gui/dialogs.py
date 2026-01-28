@@ -40,7 +40,8 @@ class StartStegoDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Omega Steganography Tool")
-        self.setFixedSize(600, 500)
+        self.resize(680, 520)
+        self.setMinimumSize(600, 480)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         layout = QVBoxLayout(self)
@@ -194,7 +195,8 @@ class GhostLinkDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("GhostLink Secure Tunnel (SFTP)")
-        self.setFixedSize(500, 600)
+        self.resize(560, 640)
+        self.setMinimumSize(480, 560)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         self.link = GhostLink()
@@ -313,7 +315,8 @@ class PassGenDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Titanium Password Generator")
-        self.setFixedSize(400, 350)
+        self.resize(460, 380)
+        self.setMinimumSize(380, 320)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         layout = QVBoxLayout(self)
@@ -379,6 +382,7 @@ class NotesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Encrypted Notes Journal")
         self.resize(900, 600)
+        self.setMinimumSize(760, 520)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         self.vault_name = vault_name
@@ -432,7 +436,7 @@ class NotesDialog(QDialog):
         title_row.addWidget(self.in_title)
 
         btn_delete = QPushButton("Delete", objectName="Danger")
-        btn_delete.setFixedWidth(80)
+        btn_delete.setMinimumWidth(80)
         btn_delete.clicked.connect(self.delete_note)
         title_row.addWidget(btn_delete)
 
@@ -563,7 +567,8 @@ class InitVaultDialog(QDialog):
         super().__init__(parent)
         self.vault_mgr = vault_mgr
         self.setWindowTitle("Create Secure Environment")
-        self.setFixedSize(500, 550)
+        self.resize(560, 600)
+        self.setMinimumSize(480, 520)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         self.stack = QStackedWidget()
@@ -714,7 +719,8 @@ class ThemeCreatorDialog(QDialog):
         super().__init__(parent)
         self.tm = theme_manager
         self.setWindowTitle("Design Custom Theme")
-        self.resize(500, 400)
+        self.resize(520, 420)
+        self.setMinimumSize(460, 360)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         layout = QVBoxLayout(self)
@@ -798,7 +804,8 @@ class RecoveryDialog(QDialog):
         super().__init__(parent)
         self.vault_key = vault_key
         self.setWindowTitle("Recovery Shares")
-        self.resize(520, 420)
+        self.resize(560, 440)
+        self.setMinimumSize(480, 380)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         layout = QVBoxLayout(self)
@@ -889,7 +896,8 @@ class FolderWatcherDialog(QDialog):
         super().__init__(parent)
         self.watcher = watcher
         self.setWindowTitle("Auto-Encrypt Watcher")
-        self.resize(600, 400)
+        self.resize(640, 420)
+        self.setMinimumSize(560, 360)
         self.setStyleSheet(styles.build_stylesheet() + f"QDialog {{ background-color: {styles.DIALOG_BG}; }}")
 
         layout = QVBoxLayout(self)
@@ -934,7 +942,7 @@ class FolderWatcherDialog(QDialog):
         )
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setFixedHeight(100)
+        self.log.setMinimumHeight(100)
         layout.addWidget(self.log)
 
         self.update_ui()
