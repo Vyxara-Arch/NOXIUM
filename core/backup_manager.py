@@ -2,6 +2,8 @@ import os
 import shutil
 import zipfile
 import datetime
+import tempfile
+import stat
 
 from core.crypto_engine import CryptoEngine
 from core.vault_storage import VAULT_EXT
@@ -26,9 +28,11 @@ class BackupManager:
                 return False, "Vault not found"
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        temp_zip = f"temp_backup_{timestamp}.zip"
+        temp_zip = None
 
         try:
+            fd, temp_zip = tempfile.mkstemp(prefix="noxium_backup_", suffix=".zip")
+            os.close(fd)
             with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
                 ext = os.path.splitext(vault_path)[1]
                 zf.write(vault_path, arcname=f"{vault_name}{ext}")
@@ -57,18 +61,21 @@ class BackupManager:
         except Exception as e:
             return False, str(e)
         finally:
-            if os.path.exists(temp_zip):
+            if temp_zip and os.path.exists(temp_zip):
                 os.remove(temp_zip)
-            if os.path.exists(temp_zip + CryptoEngine.ENCRYPTED_EXT):
+            if temp_zip and os.path.exists(temp_zip + CryptoEngine.ENCRYPTED_EXT):
                 os.remove(temp_zip + CryptoEngine.ENCRYPTED_EXT)
 
     def import_vault(self, backup_path, password):
         if not os.path.exists(backup_path):
             return False, "Backup file not found"
 
-        temp_enc = "temp_restore_" + os.path.basename(backup_path) + CryptoEngine.ENCRYPTED_EXT
-        temp_zip = temp_enc.replace(CryptoEngine.ENCRYPTED_EXT, "")
+        temp_enc = None
+        temp_zip = None
 
+        fd, temp_enc = tempfile.mkstemp(prefix="noxium_restore_", suffix=CryptoEngine.ENCRYPTED_EXT)
+        os.close(fd)
+        temp_zip = temp_enc[: -len(CryptoEngine.ENCRYPTED_EXT)]
         shutil.copy(backup_path, temp_enc)
 
         try:
@@ -80,17 +87,38 @@ class BackupManager:
                 return False, "Decrypted file is not a valid archive. Wrong password?"
 
             with zipfile.ZipFile(dec_path, "r") as zf:
-                zf.extractall(self.vaults_dir)
+                self._safe_extract(zf, self.vaults_dir)
 
             return True, "Vault restored successfully"
 
         except Exception as e:
             return False, f"Restore failed: {str(e)}"
         finally:
-            if os.path.exists(temp_enc):
+            if temp_enc and os.path.exists(temp_enc):
                 os.remove(temp_enc)
-            if os.path.exists(temp_zip):
+            if temp_zip and os.path.exists(temp_zip):
                 try:
                     os.remove(temp_zip)
                 except Exception:
                     pass
+
+    def _safe_extract(self, zf: zipfile.ZipFile, dest_dir: str) -> None:
+        base_dir = os.path.abspath(dest_dir)
+        for member in zf.infolist():
+            name = member.filename
+            if not name or name.endswith("/"):
+                continue
+
+            # Block absolute paths and traversal
+            target_path = os.path.abspath(os.path.join(base_dir, name))
+            if os.path.commonpath([base_dir, target_path]) != base_dir:
+                raise ValueError(f"Unsafe archive path: {name}")
+
+            # Best-effort symlink detection (Unix zips)
+            mode = (member.external_attr >> 16) & 0xFFFF
+            if stat.S_IFMT(mode) == stat.S_IFLNK:
+                raise ValueError(f"Symlink entries not allowed: {name}")
+
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            with zf.open(member, "r") as src, open(target_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)

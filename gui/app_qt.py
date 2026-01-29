@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QAbstractItemView,
+    QTabWidget,
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
@@ -127,27 +128,50 @@ class NDSFC_Pro(QMainWindow):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(title)
 
-        cl.addSpacing(20)
+        subtitle = QLabel("Secure access to your encrypted vaults.")
+        subtitle.setProperty("tone", "muted")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
+        cl.addWidget(subtitle)
+
+        cl.addSpacing(18)
 
         # Inputs
+        lbl_vault = QLabel("Vault")
+        lbl_vault.setProperty("tone", "muted")
+        cl.addWidget(lbl_vault)
         self.cb_vaults = QComboBox()
         self.cb_vaults.setMinimumHeight(45)
+        self.cb_vaults.setToolTip("Select the vault you want to unlock.")
         self.refresh_vaults()
-
-        self.in_pass = QLineEdit(placeholderText="Access Key")
-        self.in_pass.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.in_2fa = QLineEdit(placeholderText="2FA Token")
-        self.in_2fa.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         cl.addWidget(self.cb_vaults)
+
+        lbl_pass = QLabel("Master Password")
+        lbl_pass.setProperty("tone", "muted")
+        cl.addWidget(lbl_pass)
+        self.in_pass = QLineEdit(placeholderText="Enter your master password")
+        self.in_pass.setEchoMode(QLineEdit.EchoMode.Password)
         cl.addWidget(self.in_pass)
+
+        lbl_2fa = QLabel("Two-Factor Code")
+        lbl_2fa.setProperty("tone", "muted")
+        cl.addWidget(lbl_2fa)
+        self.in_2fa = QLineEdit(placeholderText="6-digit code")
+        self.in_2fa.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.in_2fa.setToolTip("Enter the 6-digit code from your authenticator app.")
+        self.in_2fa.setMaxLength(6)
         cl.addWidget(self.in_2fa)
+
+        helper_2fa = QLabel("Use the 6-digit code from your authenticator app.")
+        helper_2fa.setProperty("tone", "muted")
+        helper_2fa.setStyleSheet("font-size: 12px;")
+        helper_2fa.setWordWrap(True)
+        cl.addWidget(helper_2fa)
 
         cl.addSpacing(10)
 
         # Login Button
-        btn_login = QPushButton("SIGN IN", objectName="Primary")
+        btn_login = QPushButton("UNLOCK VAULT", objectName="Primary")
         btn_login.setMinimumHeight(50)
         btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_login.clicked.connect(self.do_login)
@@ -157,12 +181,12 @@ class NDSFC_Pro(QMainWindow):
 
         # Footer Actions
         row = QHBoxLayout()
-        btn_new = QPushButton(" Create New", objectName="LinkButton")
+        btn_new = QPushButton(" Create Vault", objectName="LinkButton")
         btn_new.setIcon(qta.icon("fa5s.plus", color=styles.TEXT_MUTED))
         btn_new.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_new.clicked.connect(self.show_create_vault_dialog)
 
-        btn_imp = QPushButton(" Import", objectName="LinkButton")
+        btn_imp = QPushButton(" Import Backup", objectName="LinkButton")
         btn_imp.setIcon(qta.icon("fa5s.file-import", color=styles.TEXT_MUTED))
         btn_imp.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_imp.clicked.connect(self.do_vault_import)
@@ -193,21 +217,25 @@ class NDSFC_Pro(QMainWindow):
         sb_l = QVBoxLayout(sidebar)
         sb_l.setContentsMargins(20, 40, 20, 20)
 
-        title = QLabel("NOXIUM CONTROL")
+        title = QLabel("NOXIUM VAULT")
         title.setProperty("tone", "accent")
         title.setStyleSheet(
             "font-size: 16px; font-weight: 700; letter-spacing: 3px;"
         )
         sb_l.addWidget(title)
-        sb_l.addSpacing(40)
+        subtitle = QLabel("Secure workspace")
+        subtitle.setProperty("tone", "muted")
+        subtitle.setStyleSheet("font-size: 12px;")
+        sb_l.addWidget(subtitle)
+        sb_l.addSpacing(32)
 
         self.dash_stack = FadeStack()
 
         btns = [
-            ("OPERATIONS", "fa5s.chart-pie", 0),
-            ("CRYPTOGRAPHY", "fa5s.lock", 1),
-            ("OMEGA TOOLS", "fa5s.magic", 2),
-            ("ENVIRONMENT", "fa5s.cog", 3),
+            ("DASHBOARD", "fa5s.home", 0),
+            ("ENCRYPTION", "fa5s.lock", 1),
+            ("TOOLS", "fa5s.magic", 2),
+            ("SETTINGS", "fa5s.cog", 3),
         ]
 
         self.nav_buttons = []
@@ -257,19 +285,33 @@ class NDSFC_Pro(QMainWindow):
 
         # Header
         header = QHBoxLayout()
-        lbl_welcome = QLabel("Mission Control")
+        title_col = QVBoxLayout()
+        lbl_welcome = QLabel("Dashboard")
         lbl_welcome.setStyleSheet("font-size: 28px; font-weight: bold;")
-        header.addWidget(lbl_welcome)
+        title_col.addWidget(lbl_welcome)
+        lbl_sub = QLabel("Quick status, shortcuts, and recent activity.")
+        lbl_sub.setProperty("tone", "muted")
+        lbl_sub.setStyleSheet("font-size: 12px;")
+        title_col.addWidget(lbl_sub)
+        header.addLayout(title_col)
         header.addStretch()
 
         # Search Bar
+        search_col = QVBoxLayout()
+        lbl_search = QLabel("Search")
+        lbl_search.setProperty("tone", "muted")
+        lbl_search.setStyleSheet("font-size: 12px;")
+        search_col.addWidget(lbl_search)
         self.txt_search = QLineEdit()
-        self.txt_search.setPlaceholderText("Search Encrypted Index...")
+        self.txt_search.setPlaceholderText("Search by filename or tag...")
         self.txt_search.setMinimumWidth(240)
         self.txt_search.setMaximumWidth(420)
         self.txt_search.setObjectName("SearchField")
+        self.txt_search.setClearButtonEnabled(True)
+        self.txt_search.setToolTip("Search the encrypted index by filename or tag.")
         self.txt_search.textChanged.connect(self.do_search)
-        header.addWidget(self.txt_search)
+        search_col.addWidget(self.txt_search)
+        header.addLayout(search_col)
 
         l.addLayout(header)
         l.addSpacing(20)
@@ -296,7 +338,7 @@ class NDSFC_Pro(QMainWindow):
         v_card = QFrame(objectName="Card")
         v_card.setMinimumHeight(160)
         vl = QVBoxLayout(v_card)
-        lbl_active = QLabel("Active Environment")
+        lbl_active = QLabel("Active Vault")
         lbl_active.setProperty("tone", "muted")
         lbl_active.setStyleSheet("font-weight: bold;")
         vl.addWidget(lbl_active)
@@ -304,8 +346,16 @@ class NDSFC_Pro(QMainWindow):
         self.lbl_vault_name.setProperty("tone", "accent")
         self.lbl_vault_name.setStyleSheet("font-size: 24px; font-weight: bold;")
         vl.addWidget(self.lbl_vault_name)
+        self.lbl_vault_status = QLabel("Status: Locked")
+        self.lbl_vault_status.setProperty("tone", "muted")
+        self.lbl_vault_status.setStyleSheet("font-size: 12px;")
+        vl.addWidget(self.lbl_vault_status)
+        self.lbl_auto_lock = QLabel("Auto-lock: --")
+        self.lbl_auto_lock.setProperty("tone", "muted")
+        self.lbl_auto_lock.setStyleSheet("font-size: 12px;")
+        vl.addWidget(self.lbl_auto_lock)
         vl.addStretch()
-        b_lock = QPushButton("LOCK NOW")
+        b_lock = QPushButton("LOCK VAULT")
         b_lock.setObjectName("Secondary")
         b_lock.clicked.connect(self.do_logout)
         vl.addWidget(b_lock)
@@ -320,20 +370,29 @@ class NDSFC_Pro(QMainWindow):
         lbl_quick.setStyleSheet("font-weight: bold;")
         ql.addWidget(lbl_quick)
 
-        bq1 = QPushButton("  Encrypt File")
+        bq1 = QPushButton("  Encrypt Files")
         bq1.setIcon(qta.icon("fa5s.lock", color=styles.ACCENT_COLOR))
+        bq1.setToolTip("Go to the encryption workspace.")
         bq1.clicked.connect(lambda: self.switch_tab(1))  # Crypto tab
         ql.addWidget(bq1)
 
-        bq2 = QPushButton("  Secure Tunnel")
-        bq2.setIcon(qta.icon("fa5s.network-wired", color=styles.ACCENT_COLOR))
-        bq2.clicked.connect(self.open_ghostlink)
+        bq2 = QPushButton("  Open Notes")
+        bq2.setIcon(qta.icon("fa5s.sticky-note", color=styles.ACCENT_COLOR))
+        bq2.setToolTip("Open your encrypted notes journal.")
+        bq2.clicked.connect(self.open_notes)
         ql.addWidget(bq2)
 
-        bq3 = QPushButton("  Rebuild Index")
-        bq3.setIcon(qta.icon("fa5s.search-plus", color=styles.ACCENT_COLOR))
-        bq3.clicked.connect(self.rebuild_index)
+        bq3 = QPushButton("  Secure Tunnel")
+        bq3.setIcon(qta.icon("fa5s.network-wired", color=styles.ACCENT_COLOR))
+        bq3.setToolTip("Open Ghost Link (SFTP).")
+        bq3.clicked.connect(self.open_ghostlink)
         ql.addWidget(bq3)
+
+        bq4 = QPushButton("  Rebuild Index")
+        bq4.setIcon(qta.icon("fa5s.search-plus", color=styles.ACCENT_COLOR))
+        bq4.setToolTip("Scan a folder to refresh the encrypted index.")
+        bq4.clicked.connect(self.rebuild_index)
+        ql.addWidget(bq4)
 
         grid.addWidget(q_card, 0, 2)
 
@@ -349,9 +408,7 @@ class NDSFC_Pro(QMainWindow):
         self.list_audit.setStyleSheet(
             "background: transparent; border: 0px; font-family: Consolas;"
         )
-        # Dummy data
-        self.list_audit.addItem("[SYSTEM] Session Initialized")
-        self.list_audit.addItem("[AUDIT] Integrity Check Passed")
+        self.update_log()
 
         al.addWidget(self.list_audit)
         grid.addWidget(audit_frame, 1, 0, 1, 3)
@@ -373,7 +430,7 @@ class NDSFC_Pro(QMainWindow):
         self.table_results.setObjectName("ResultsTable")
         self.table_results.setColumnCount(5)
         self.table_results.setHorizontalHeaderLabels(
-            ["Filename", "Size", "Date", "Original Path", "Algo"]
+            ["Name", "Size", "Date", "Location", "Algorithm"]
         )
         self.table_results.horizontalHeader().setStretchLastSection(True)
         self.table_results.setAlternatingRowColors(True)
@@ -389,6 +446,7 @@ class NDSFC_Pro(QMainWindow):
         self.dash_content.addWidget(page_results)
 
         l.addWidget(self.dash_content)
+        self.update_session_summary()
         return p
 
     def do_search(self, text):
@@ -403,7 +461,9 @@ class NDSFC_Pro(QMainWindow):
             for row, item in enumerate(res):
                 self.table_results.insertRow(row)
                 self.table_results.setItem(row, 0, QTableWidgetItem(item["filename"]))
-                self.table_results.setItem(row, 1, QTableWidgetItem(str(item["size"])))
+                self.table_results.setItem(
+                    row, 1, QTableWidgetItem(self.format_size(item["size"]))
+                )
                 self.table_results.setItem(row, 2, QTableWidgetItem(item["c_time"]))
                 self.table_results.setItem(
                     row, 3, QTableWidgetItem(item.get("path", "Unknown"))
@@ -430,11 +490,15 @@ class NDSFC_Pro(QMainWindow):
 
         # Header
         header = QHBoxLayout()
-        lbl_title = QLabel("Cryptographer")
+        lbl_title = QLabel("Encryption Workspace")
         lbl_title.setStyleSheet("font-size: 28px; font-weight: bold;")
         header.addWidget(lbl_title)
         header.addStretch()
         l.addLayout(header)
+        lbl_hint = QLabel("Add files, choose a mode, then encrypt or decrypt.")
+        lbl_hint.setProperty("tone", "muted")
+        lbl_hint.setStyleSheet("font-size: 12px;")
+        l.addWidget(lbl_hint)
         l.addSpacing(20)
 
         # Grid Layout for Controls and File List
@@ -459,18 +523,59 @@ class NDSFC_Pro(QMainWindow):
         lbl_mode = QLabel("Mode:")
         lbl_mode.setProperty("tone", "muted")
         cl.addWidget(lbl_mode)
-        self.crypto_mode = QComboBox()
-        self.crypto_mode.addItems(
+        self.mode_tabs = QTabWidget()
+        self.mode_tabs.setObjectName("ModeTabs")
+
+        modern_tab = QWidget()
+        modern_layout = QVBoxLayout(modern_tab)
+        modern_layout.setContentsMargins(0, 0, 0, 0)
+        modern_layout.setSpacing(8)
+
+        self.crypto_mode_modern = QComboBox()
+        self.crypto_mode_modern.addItems(
             [
                 "ChaCha20-Poly1305 (Fast)",
                 "AES-256-GCM (Balanced)",
+                "AES-256-SIV (Misuse-Resistant)",
+            ]
+        )
+        if CryptoEngine.pqc_available():
+            self.crypto_mode_modern.addItem("PQC Hybrid (Kyber)")
+        self.crypto_mode_modern.setToolTip("Select the encryption algorithm to use.")
+        modern_layout.addWidget(self.crypto_mode_modern)
+
+        mode_hint = QLabel("Tip: ChaCha20-Poly1305 is fast and secure for most files.")
+        mode_hint.setProperty("tone", "muted")
+        mode_hint.setStyleSheet("font-size: 12px;")
+        mode_hint.setWordWrap(True)
+        modern_layout.addWidget(mode_hint)
+
+        legacy_tab = QWidget()
+        legacy_layout = QVBoxLayout(legacy_tab)
+        legacy_layout.setContentsMargins(0, 0, 0, 0)
+        legacy_layout.setSpacing(8)
+
+        legacy_warn = QLabel(
+            "Legacy algorithms are for compatibility only and are not recommended for new data."
+        )
+        legacy_warn.setProperty("tone", "accent-secondary")
+        legacy_warn.setStyleSheet("font-size: 12px;")
+        legacy_warn.setWordWrap(True)
+        legacy_layout.addWidget(legacy_warn)
+
+        self.crypto_mode_legacy = QComboBox()
+        self.crypto_mode_legacy.addItems(
+            [
                 "LetNoxEnc-256 (Experimental)",
                 "LetNoxEnc-512 (Experimental)",
             ]
         )
-        if CryptoEngine.pqc_available():
-            self.crypto_mode.addItem("PQC Hybrid (Kyber)")
-        cl.addWidget(self.crypto_mode)
+        self.crypto_mode_legacy.setToolTip("Legacy/experimental algorithms.")
+        legacy_layout.addWidget(self.crypto_mode_legacy)
+
+        self.mode_tabs.addTab(modern_tab, "Modern")
+        self.mode_tabs.addTab(legacy_tab, "Legacy")
+        cl.addWidget(self.mode_tabs)
 
         # Options
         cl.addSpacing(10)
@@ -479,9 +584,11 @@ class NDSFC_Pro(QMainWindow):
         cl.addWidget(lbl_options)
         self.chk_shred = QCheckBox("Secure Shred Original")
         self.chk_shred.setChecked(True)
+        self.chk_shred.setToolTip("Overwrite original files after encryption.")
         cl.addWidget(self.chk_shred)
 
         self.chk_compress = QCheckBox("Compress Before Encrypt")
+        self.chk_compress.setToolTip("Reduce size before encryption (may slow large files).")
         cl.addWidget(self.chk_compress)
 
         cl.addStretch()
@@ -513,6 +620,10 @@ class NDSFC_Pro(QMainWindow):
         lbl_queue.setProperty("tone", "muted")
         lbl_queue.setStyleSheet("font-weight: bold; font-size: 16px;")
         fcl.addWidget(lbl_queue)
+        lbl_queue_hint = QLabel("Drag & drop files here or use Add Files.")
+        lbl_queue_hint.setProperty("tone", "muted")
+        lbl_queue_hint.setStyleSheet("font-size: 12px;")
+        fcl.addWidget(lbl_queue_hint)
 
         self.file_table = QTableWidget()
         self.file_table.setObjectName("DropTable")
@@ -546,7 +657,7 @@ class NDSFC_Pro(QMainWindow):
         b_remove.setIcon(qta.icon("fa5s.trash", color=styles.TEXT_COLOR))
         b_remove.clicked.connect(self.remove_selected_files)
 
-        b_clear = QPushButton(" Clear All")
+        b_clear = QPushButton(" Clear List")
         b_clear.clicked.connect(lambda: self.file_table.setRowCount(0))
 
         file_acts.addWidget(b_add)
@@ -566,11 +677,13 @@ class NDSFC_Pro(QMainWindow):
         b_enc = QPushButton(" ENCRYPT ALL", objectName="Primary")
         b_enc.setIcon(qta.icon("fa5s.lock", color="white"))
         b_enc.setMinimumHeight(50)
+        b_enc.setToolTip("Encrypt all files in the queue.")
         b_enc.clicked.connect(self.run_encrypt)
 
         b_dec = QPushButton(" DECRYPT ALL", objectName="Secondary")
         b_dec.setIcon(qta.icon("fa5s.unlock", color=styles.TEXT_COLOR))
         b_dec.setMinimumHeight(50)
+        b_dec.setToolTip("Decrypt all files in the queue.")
         b_dec.clicked.connect(self.run_decrypt)
 
         action_row.addWidget(b_enc)
@@ -586,10 +699,8 @@ class NDSFC_Pro(QMainWindow):
         l.setContentsMargins(30, 30, 30, 30)
         l.setSpacing(20)
 
-        title = QLabel(
-            "Environment Settings", styleSheet="font-size: 28px; font-weight: bold;"
-        )
-        subtitle = QLabel("Manage encryption, PQC, appearance, and recovery tools.")
+        title = QLabel("Settings", styleSheet="font-size: 28px; font-weight: bold;")
+        subtitle = QLabel("Manage encryption, security, backups, and appearance.")
         subtitle.setProperty("tone", "muted")
         l.addWidget(title)
         l.addWidget(subtitle)
@@ -622,17 +733,50 @@ class NDSFC_Pro(QMainWindow):
             card_l.addLayout(form)
             return card, form
 
-        self.set_algo = QComboBox()
-        self.set_algo.addItems(
+        self.set_algo_tabs = QTabWidget()
+        self.set_algo_tabs.setObjectName("DefaultAlgoTabs")
+
+        set_modern_tab = QWidget()
+        set_modern_layout = QVBoxLayout(set_modern_tab)
+        set_modern_layout.setContentsMargins(0, 0, 0, 0)
+        set_modern_layout.setSpacing(8)
+
+        self.set_algo_modern = QComboBox()
+        self.set_algo_modern.addItems(
             [
                 "ChaCha20-Poly1305 (Fast)",
                 "AES-256-GCM (Balanced)",
+                "AES-256-SIV (Misuse-Resistant)",
+            ]
+        )
+        if CryptoEngine.pqc_available():
+            self.set_algo_modern.addItem("PQC Hybrid (Kyber)")
+        set_modern_layout.addWidget(self.set_algo_modern)
+
+        set_legacy_tab = QWidget()
+        set_legacy_layout = QVBoxLayout(set_legacy_tab)
+        set_legacy_layout.setContentsMargins(0, 0, 0, 0)
+        set_legacy_layout.setSpacing(8)
+
+        set_legacy_warn = QLabel(
+            "Legacy algorithms are for compatibility only and are not recommended for new data."
+        )
+        set_legacy_warn.setProperty("tone", "accent-secondary")
+        set_legacy_warn.setStyleSheet("font-size: 12px;")
+        set_legacy_warn.setWordWrap(True)
+        set_legacy_layout.addWidget(set_legacy_warn)
+
+        self.set_algo_legacy = QComboBox()
+        self.set_algo_legacy.addItems(
+            [
                 "LetNoxEnc-256 (Experimental)",
                 "LetNoxEnc-512 (Experimental)",
             ]
         )
-        if CryptoEngine.pqc_available():
-            self.set_algo.addItem("PQC Hybrid (Kyber)")
+        set_legacy_layout.addWidget(self.set_algo_legacy)
+
+        self.set_algo_tabs.addTab(set_modern_tab, "Modern")
+        self.set_algo_tabs.addTab(set_legacy_tab, "Legacy")
 
         self.chk_default_compress = QCheckBox("Compress before encrypt")
 
@@ -661,11 +805,13 @@ class NDSFC_Pro(QMainWindow):
         self.set_shred.setRange(1, 35)
         self.set_shred.setValue(3)
         self.set_shred.setSuffix(" Passes")
+        self.set_shred.setToolTip("Number of overwrite passes for secure delete.")
 
         self.set_auto_lock = QSpinBox()
         self.set_auto_lock.setRange(0, 120)
         self.set_auto_lock.setValue(10)
         self.set_auto_lock.setSuffix(" min")
+        self.set_auto_lock.setToolTip("Lock the vault after inactivity (0 = Off).")
 
         self.chk_device_lock = QCheckBox("Bind encrypted files to this device")
         self.chk_device_lock.setToolTip(
@@ -677,9 +823,11 @@ class NDSFC_Pro(QMainWindow):
         btn_create.clicked.connect(self.open_theme_creator)
 
         btn_export = QPushButton("Backup Vault (.vib)")
+        btn_export.setToolTip("Create an encrypted backup file.")
         btn_export.clicked.connect(self.do_vault_export)
 
         btn_recovery = QPushButton("Generate Recovery Shares")
+        btn_recovery.setToolTip("Create Shamir recovery shares for the vault key.")
         btn_recovery.clicked.connect(self.open_recovery_shares)
 
         btn_save = QPushButton("Save Configuration", objectName="Primary")
@@ -689,7 +837,7 @@ class NDSFC_Pro(QMainWindow):
         enc_card, enc_form = make_card(
             "Encryption", "Default algorithm and PQC settings."
         )
-        enc_form.addRow("Default Encryption:", self.set_algo)
+        enc_form.addRow("Default Encryption:", self.set_algo_tabs)
         enc_form.addRow("Compression:", self.chk_default_compress)
         enc_form.addRow("PQC Hybrid:", self.chk_pqc_enable)
         enc_form.addRow("PQC KEM:", self.set_pqc_kem)
@@ -743,19 +891,19 @@ class NDSFC_Pro(QMainWindow):
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setWindowTitle("Device Lock Disclaimer")
-            msg.setText("Device Lock привязывает зашифрованные файлы к этому устройству.")
+            msg.setText("Device Lock binds encrypted files to this device.")
             msg.setInformativeText(
-                "Основные условия:\n"
-                "• Файлы, зашифрованные с Device Lock, не откроются на другой машине.\n"
-                "• Переустановка ОС или смена железа может привести к полной потере доступа.\n"
-                "• Отключение опции не снимает блокировку с уже зашифрованных файлов.\n"
-                "• Рекомендуется хранить резервные копии без Device Lock.\n"
-                "• Функция экспериментальная, вы используете её на свой риск."
+                "Important:\n"
+                "- Files encrypted with Device Lock will not open on other machines.\n"
+                "- Reinstalling the OS or changing hardware may permanently lock access.\n"
+                "- Turning this off does not unlock files already protected.\n"
+                "- Keep backups without Device Lock for recovery.\n"
+                "- This feature is experimental; use at your own risk."
             )
             accept_btn = msg.addButton(
-                "Я принимаю условия, продолжить", QMessageBox.ButtonRole.AcceptRole
+                "I understand and want to continue", QMessageBox.ButtonRole.AcceptRole
             )
-            msg.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+            msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
             msg.exec()
             if msg.clickedButton() != accept_btn:
                 self.chk_device_lock.blockSignals(True)
@@ -767,10 +915,13 @@ class NDSFC_Pro(QMainWindow):
     def tab_omega(self):
         p = QWidget()
         l = QVBoxLayout(p)
-        l.setContentsMargins(50, 50, 50, 50)
-        l.addWidget(
-            QLabel("Omega Utilities", styleSheet="font-size: 28px; font-weight: bold;")
-        )
+        l.setContentsMargins(30, 30, 30, 30)
+        title = QLabel("Tools & Utilities", styleSheet="font-size: 28px; font-weight: bold;")
+        subtitle = QLabel("Extra tools for transport, recovery, notes, and stego.")
+        subtitle.setProperty("tone", "muted")
+        subtitle.setStyleSheet("font-size: 12px;")
+        l.addWidget(title)
+        l.addWidget(subtitle)
 
         grid = QGridLayout()
         grid.setSpacing(20)
@@ -778,58 +929,70 @@ class NDSFC_Pro(QMainWindow):
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)
 
-        # Card 1: Stego
-        c1 = QFrame(objectName="Card")
-        l1 = QVBoxLayout(c1)
-        l1.addWidget(
-            QLabel("Steganography", styleSheet="font-weight:bold; font-size:16px")
-        )
-        l1.addWidget(QLabel("Hide encrypted archives inside PNG."))
-        b1 = QPushButton("Launch Tool")
-        b1.clicked.connect(self.open_stego_tool)
-        l1.addWidget(b1)
+        def make_tool_card(title_text, desc, icon_name, button_text, handler):
+            card = QFrame(objectName="Card")
+            card.setMinimumHeight(180)
+            card_l = QVBoxLayout(card)
+            card_l.setContentsMargins(20, 20, 20, 20)
+            card_l.setSpacing(10)
 
-        # Card 2: Ghost
-        c2 = QFrame(objectName="Card")
-        l2 = QVBoxLayout(c2)
-        l2.addWidget(
-            QLabel("Ghost Link (SFTP)", styleSheet="font-weight:bold; font-size:16px")
-        )
-        l2.addWidget(QLabel("Secure Tunnel file transfer."))
-        b2 = QPushButton("Connect...")
-        b2.clicked.connect(self.open_ghostlink)
-        l2.addWidget(b2)
+            header = QHBoxLayout()
+            icon = QLabel()
+            icon.setPixmap(qta.icon(icon_name, color=styles.ACCENT_COLOR).pixmap(28, 28))
+            header.addWidget(icon)
+            ttl = QLabel(title_text)
+            ttl.setStyleSheet("font-weight: bold; font-size: 16px;")
+            header.addWidget(ttl)
+            header.addStretch()
+            card_l.addLayout(header)
 
-        # Card 3: PassGen
-        c3 = QFrame(objectName="Card")
-        l3 = QVBoxLayout(c3)
-        l3.addWidget(QLabel("PassGen", styleSheet="font-weight:bold; font-size:16px"))
-        l3.addWidget(QLabel("Military-grade key gen."))
-        b3 = QPushButton("Open Generator")
-        b3.clicked.connect(self.open_passgen)
-        l3.addWidget(b3)
+            desc_lbl = QLabel(desc)
+            desc_lbl.setProperty("tone", "muted")
+            desc_lbl.setStyleSheet("font-size: 12px;")
+            desc_lbl.setWordWrap(True)
+            card_l.addWidget(desc_lbl)
 
-        # Card 4: Notes
-        c4 = QFrame(objectName="Card")
-        l4 = QVBoxLayout(c4)
-        l4.addWidget(
-            QLabel("Secure Journal", styleSheet="font-weight:bold; font-size:16px")
-        )
-        l4.addWidget(QLabel("Encrypted personal notes."))
-        b4 = QPushButton("Open Journal")
-        b4.clicked.connect(self.open_notes)
-        l4.addWidget(b4)
+            card_l.addStretch()
+            btn = QPushButton(button_text)
+            btn.clicked.connect(handler)
+            card_l.addWidget(btn)
+            return card
 
-        # Card 5: Watcher
-        c5 = QFrame(objectName="Card")
-        l5 = QVBoxLayout(c5)
-        l5.addWidget(
-            QLabel("Folder Watcher", styleSheet="font-weight:bold; font-size:16px")
+        c1 = make_tool_card(
+            "Steganography",
+            "Hide or extract files inside PNG images.",
+            "fa5s.user-secret",
+            "Open Stego Tool",
+            self.open_stego_tool,
         )
-        l5.addWidget(QLabel("Auto-encrypt dropped files."))
-        b5 = QPushButton("Manage Service")
-        b5.clicked.connect(self.open_folder_watcher)
-        l5.addWidget(b5)
+        c2 = make_tool_card(
+            "Ghost Link (SFTP)",
+            "Secure file transfer over SSH with optional proxy.",
+            "fa5s.network-wired",
+            "Connect",
+            self.open_ghostlink,
+        )
+        c3 = make_tool_card(
+            "Password Generator",
+            "Create high-entropy passwords with auto-clear.",
+            "fa5s.key",
+            "Generate Password",
+            self.open_passgen,
+        )
+        c4 = make_tool_card(
+            "Secure Notes",
+            "Create and search encrypted personal notes.",
+            "fa5s.sticky-note",
+            "Open Notes",
+            self.open_notes,
+        )
+        c5 = make_tool_card(
+            "Folder Watcher",
+            "Auto-encrypt new files in selected folders.",
+            "fa5s.folder-open",
+            "Manage Watcher",
+            self.open_folder_watcher,
+        )
 
         grid.addWidget(c1, 0, 0)
         grid.addWidget(c2, 0, 1)
@@ -863,7 +1026,7 @@ class NDSFC_Pro(QMainWindow):
             name = os.path.basename(f)
             size = os.path.getsize(f)
             self.file_table.setItem(row, 0, QTableWidgetItem(name))
-            self.file_table.setItem(row, 1, QTableWidgetItem(f"{size/1024:.2f} KB"))
+            self.file_table.setItem(row, 1, QTableWidgetItem(self.format_size(size)))
             self.file_table.setItem(row, 2, QTableWidgetItem(f))
         self.update_file_stats()
 
@@ -886,16 +1049,17 @@ class NDSFC_Pro(QMainWindow):
 
         self.lbl_file_count.setText(f"Files: {count}")
 
-        if total_size < 1024:
-            size_str = f"{total_size} B"
-        elif total_size < 1024 * 1024:
-            size_str = f"{total_size / 1024:.2f} KB"
-        elif total_size < 1024 * 1024 * 1024:
-            size_str = f"{total_size / (1024 * 1024):.2f} MB"
-        else:
-            size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
+        self.lbl_total_size.setText(f"Total: {self.format_size(total_size)}")
 
-        self.lbl_total_size.setText(f"Total: {size_str}")
+    @staticmethod
+    def format_size(size: int) -> str:
+        if size < 1024:
+            return f"{size} B"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.2f} KB"
+        if size < 1024 * 1024 * 1024:
+            return f"{size / (1024 * 1024):.2f} MB"
+        return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
     def do_login(self):
         vault_name = self.cb_vaults.currentText()
@@ -946,6 +1110,7 @@ class NDSFC_Pro(QMainWindow):
             self.main_stack.fade_to_index(1)
             AuditLog.log("LOGIN", f"Accessed {vault_name}")
             self.update_log()
+            self.update_session_summary()
             self.in_pass.clear()
             self.in_2fa.clear()
         else:
@@ -958,9 +1123,14 @@ class NDSFC_Pro(QMainWindow):
         self.indexer = None
         self.session.destroy_session()
         self._session_password = None
+        self.auth.vault_key = None
+        self.auth.vault_content = None
+        self.auth.settings = {}
+        self.auth.active_vault_path = None
         self.auto_lock_timer.stop()
         self.in_pass.clear()
         self.in_2fa.clear()
+        self.update_session_summary()
         self.main_stack.fade_to_index(0)
 
     def reset_inactivity_timer(self):
@@ -1011,11 +1181,12 @@ class NDSFC_Pro(QMainWindow):
         algo_map = {
             "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
             "AES-256-GCM (Balanced)": "aes-256-gcm",
+            "AES-256-SIV (Misuse-Resistant)": "aes-256-siv",
             "PQC Hybrid (Kyber)": "pqc-hybrid",
             "LetNoxEnc-256 (Experimental)": "letnox-256",
             "LetNoxEnc-512 (Experimental)": "letnox-512",
         }
-        algo = algo_map.get(self.crypto_mode.currentText(), "chacha20-poly1305")
+        algo = algo_map.get(self.get_crypto_mode_text(), "chacha20-poly1305")
         pwd = self._get_session_password()
         if not pwd:
             return
@@ -1109,8 +1280,47 @@ class NDSFC_Pro(QMainWindow):
 
     def update_log(self):
         self.list_audit.clear()
-        for l in AuditLog.get_logs()[-10:]:
+        logs = AuditLog.get_logs()[-10:]
+        if not logs:
+            self.list_audit.addItem("No recent activity yet.")
+            return
+        for l in logs:
             self.list_audit.addItem(l)
+
+    def get_crypto_mode_text(self) -> str:
+        if hasattr(self, "mode_tabs") and self.mode_tabs.currentIndex() == 1:
+            return self.crypto_mode_legacy.currentText()
+        return self.crypto_mode_modern.currentText()
+
+    def get_default_algo_text(self) -> str:
+        if hasattr(self, "set_algo_tabs") and self.set_algo_tabs.currentIndex() == 1:
+            return self.set_algo_legacy.currentText()
+        return self.set_algo_modern.currentText()
+
+    def update_session_summary(self):
+        if not hasattr(self, "lbl_vault_name"):
+            return
+        if self.session.is_active:
+            name = self.session.current_vault or "Active"
+            status = "Status: Unlocked"
+            auto_lock = self.auth.settings.get("auto_lock_minutes", 10)
+            if auto_lock <= 0:
+                auto_text = "Auto-lock: Off"
+            else:
+                auto_text = f"Auto-lock: {auto_lock} min"
+            tone = "accent"
+        else:
+            name = "LOCKED"
+            status = "Status: Locked"
+            auto_text = "Auto-lock: --"
+            tone = "muted"
+
+        self.lbl_vault_name.setText(name)
+        self.lbl_vault_status.setText(status)
+        self.lbl_auto_lock.setText(auto_text)
+        self.lbl_vault_status.setProperty("tone", tone)
+        self.lbl_vault_status.style().unpolish(self.lbl_vault_status)
+        self.lbl_vault_status.style().polish(self.lbl_vault_status)
 
     def open_theme_creator(self):
         dlg = ThemeCreatorDialog(self, self.theme_manager)
@@ -1148,10 +1358,11 @@ class NDSFC_Pro(QMainWindow):
             self.set_nav_active(self.dash_stack.currentIndex())
 
     def save_settings(self):
-        algo_text = self.set_algo.currentText()
+        algo_text = self.get_default_algo_text()
         algo_map = {
             "ChaCha20-Poly1305 (Fast)": "chacha20-poly1305",
             "AES-256-GCM (Balanced)": "aes-256-gcm",
+            "AES-256-SIV (Misuse-Resistant)": "aes-256-siv",
             "PQC Hybrid (Kyber)": "pqc-hybrid",
             "LetNoxEnc-256 (Experimental)": "letnox-256",
             "LetNoxEnc-512 (Experimental)": "letnox-512",
@@ -1200,6 +1411,7 @@ class NDSFC_Pro(QMainWindow):
 
         self.apply_theme(theme_name, theme_mode)
         self.reset_inactivity_timer()
+        self.update_session_summary()
 
         QMessageBox.information(
             self, "Saved", f"Configuration updated.\nTheme set to {theme_name}"
@@ -1212,18 +1424,39 @@ class NDSFC_Pro(QMainWindow):
             reverse_map = {
                 "chacha20-poly1305": "ChaCha20-Poly1305 (Fast)",
                 "aes-256-gcm": "AES-256-GCM (Balanced)",
+                "aes-256-siv": "AES-256-SIV (Misuse-Resistant)",
                 "pqc-hybrid": "PQC Hybrid (Kyber)",
                 "letnox-256": "LetNoxEnc-256 (Experimental)",
                 "letnox-512": "LetNoxEnc-512 (Experimental)",
             }
             label = reverse_map.get(algo, "")
-            idx = self.set_algo.findText(label)
-            if idx >= 0:
-                self.set_algo.setCurrentIndex(idx)
-            if hasattr(self, "crypto_mode") and label:
-                idx = self.crypto_mode.findText(label)
-                if idx >= 0:
-                    self.crypto_mode.setCurrentIndex(idx)
+            if label:
+                legacy_labels = {
+                    "LetNoxEnc-256 (Experimental)",
+                    "LetNoxEnc-512 (Experimental)",
+                }
+                if hasattr(self, "set_algo_tabs"):
+                    if label in legacy_labels:
+                        self.set_algo_tabs.setCurrentIndex(1)
+                        idx = self.set_algo_legacy.findText(label)
+                        if idx >= 0:
+                            self.set_algo_legacy.setCurrentIndex(idx)
+                    else:
+                        self.set_algo_tabs.setCurrentIndex(0)
+                        idx = self.set_algo_modern.findText(label)
+                        if idx >= 0:
+                            self.set_algo_modern.setCurrentIndex(idx)
+                if hasattr(self, "mode_tabs"):
+                    if label in legacy_labels:
+                        self.mode_tabs.setCurrentIndex(1)
+                        idx = self.crypto_mode_legacy.findText(label)
+                        if idx >= 0:
+                            self.crypto_mode_legacy.setCurrentIndex(idx)
+                    else:
+                        self.mode_tabs.setCurrentIndex(0)
+                        idx = self.crypto_mode_modern.findText(label)
+                        if idx >= 0:
+                            self.crypto_mode_modern.setCurrentIndex(idx)
 
         if "file_compress" in s:
             self.chk_default_compress.setChecked(bool(s["file_compress"]))

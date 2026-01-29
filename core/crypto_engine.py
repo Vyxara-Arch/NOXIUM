@@ -53,6 +53,7 @@ class CryptoEngine:
     ALG_PQC_HYBRID = 3
     ALG_LETNOX_256 = 4
     ALG_LETNOX_512 = 5
+    ALG_AESSIV = 6
 
     KDF_ARGON2ID = 1
 
@@ -70,6 +71,12 @@ class CryptoEngine:
     DEFAULT_PARALLELISM = 2
 
     ENCRYPTED_EXT = ".ndsfc"
+
+    @staticmethod
+    def _derive_output_path(input_path: str) -> str:
+        if input_path.endswith(CryptoEngine.ENCRYPTED_EXT):
+            return input_path[: -len(CryptoEngine.ENCRYPTED_EXT)]
+        return input_path + ".dec"
 
     @staticmethod
     def pqc_available() -> bool:
@@ -323,23 +330,10 @@ class CryptoEngine:
             plaintext = zlib.compress(plaintext)
             flags |= CryptoEngine.FLAG_COMPRESS
 
-        salt = get_random_bytes(16)
-        mem_kib = CryptoEngine.DEFAULT_MEM_KIB
-        time_cost = CryptoEngine.DEFAULT_TIME_COST
-        parallelism = CryptoEngine.DEFAULT_PARALLELISM
-
-        base_key = CryptoEngine.derive_key_argon2id(
-            password,
-            salt,
-            length=32,
-            mem_kib=mem_kib,
-            time_cost=time_cost,
-            parallelism=parallelism,
-        )
-
         alg_map = {
             "chacha20-poly1305": CryptoEngine.ALG_CHACHA20,
             "aes-256-gcm": CryptoEngine.ALG_AESGCM,
+            "aes-256-siv": CryptoEngine.ALG_AESSIV,
             "pqc-hybrid": CryptoEngine.ALG_PQC_HYBRID,
             "letnox-256": CryptoEngine.ALG_LETNOX_256,
             "letnox-512": CryptoEngine.ALG_LETNOX_512,
@@ -347,6 +341,21 @@ class CryptoEngine:
         alg_id = alg_map.get(algo)
         if not alg_id:
             return False, "Unsupported algorithm"
+
+        salt = get_random_bytes(16)
+        mem_kib = CryptoEngine.DEFAULT_MEM_KIB
+        time_cost = CryptoEngine.DEFAULT_TIME_COST
+        parallelism = CryptoEngine.DEFAULT_PARALLELISM
+
+        key_len = 64 if alg_id == CryptoEngine.ALG_AESSIV else 32
+        base_key = CryptoEngine.derive_key_argon2id(
+            password,
+            salt,
+            length=key_len,
+            mem_kib=mem_kib,
+            time_cost=time_cost,
+            parallelism=parallelism,
+        )
 
         kem_id = None
         kem_ct = None
@@ -362,7 +371,9 @@ class CryptoEngine:
                 return False, "Unsupported PQC KEM"
             kem_id = CryptoEngine.pqc_kem_names().index(pqc_kem) + 1
             kem_ct, shared = CryptoEngine._kem_encapsulate(pqc_kem, pqc_public_key)
-            final_key = CryptoEngine._hkdf(base_key + shared, salt, b"noxium-pqc", 32)
+            final_key = CryptoEngine._hkdf(
+                base_key + shared, salt, b"noxium-pqc", key_len
+            )
             flags |= CryptoEngine.FLAG_PQC
         elif alg_id in (CryptoEngine.ALG_LETNOX_256, CryptoEngine.ALG_LETNOX_512):
             variant = 256 if alg_id == CryptoEngine.ALG_LETNOX_256 else 512
@@ -374,11 +385,14 @@ class CryptoEngine:
             except Exception:
                 return False, "Device lock unavailable"
             final_key = CryptoEngine._hkdf(
-                final_key + device_binding, salt, b"noxium-device", 32
+                final_key + device_binding, salt, b"noxium-device", key_len
             )
             flags |= CryptoEngine.FLAG_DEVICE
 
-        nonce = get_random_bytes(12)
+        if alg_id == CryptoEngine.ALG_AESSIV:
+            nonce = get_random_bytes(16)
+        else:
+            nonce = get_random_bytes(12)
         tag_len = 16
         header = CryptoEngine._build_header(
             alg_id,
@@ -395,6 +409,8 @@ class CryptoEngine:
 
         if alg_id == CryptoEngine.ALG_AESGCM:
             cipher = AES.new(final_key, AES.MODE_GCM, nonce=nonce)
+        elif alg_id == CryptoEngine.ALG_AESSIV:
+            cipher = AES.new(final_key, AES.MODE_SIV, nonce=nonce)
         else:
             cipher = ChaCha20_Poly1305.new(key=final_key, nonce=nonce)
 
@@ -442,10 +458,11 @@ class CryptoEngine:
         tag = raw[nonce_end:tag_end]
         ciphertext = raw[tag_end:]
 
+        key_len = 64 if header["alg_id"] == CryptoEngine.ALG_AESSIV else 32
         base_key = CryptoEngine.derive_key_argon2id(
             password,
             header["salt"],
-            length=32,
+            length=key_len,
             mem_kib=header["mem_kib"],
             time_cost=header["time_cost"],
             parallelism=header["parallelism"],
@@ -466,7 +483,7 @@ class CryptoEngine:
                 kem_name, pqc_private_key, header["kem_ct"]
             )
             final_key = CryptoEngine._hkdf(
-                base_key + shared, header["salt"], b"noxium-pqc", 32
+                base_key + shared, header["salt"], b"noxium-pqc", key_len
             )
 
         if header["flags"] & CryptoEngine.FLAG_DEVICE:
@@ -475,13 +492,22 @@ class CryptoEngine:
             except Exception:
                 return False, "Device lock unavailable"
             final_key = CryptoEngine._hkdf(
-                final_key + device_binding, header["salt"], b"noxium-device", 32
+                final_key + device_binding, header["salt"], b"noxium-device", key_len
             )
 
         if header["alg_id"] == CryptoEngine.ALG_AESGCM:
             cipher = AES.new(final_key, AES.MODE_GCM, nonce=nonce)
-        else:
+        elif header["alg_id"] == CryptoEngine.ALG_AESSIV:
+            cipher = AES.new(final_key, AES.MODE_SIV, nonce=nonce)
+        elif header["alg_id"] in (
+            CryptoEngine.ALG_CHACHA20,
+            CryptoEngine.ALG_PQC_HYBRID,
+            CryptoEngine.ALG_LETNOX_256,
+            CryptoEngine.ALG_LETNOX_512,
+        ):
             cipher = ChaCha20_Poly1305.new(key=final_key, nonce=nonce)
+        else:
+            return False, "Unsupported algorithm"
 
         header_bytes = raw[:offset]
         cipher.update(header_bytes)
@@ -506,7 +532,7 @@ class CryptoEngine:
             except Exception as e:
                 return False, f"Decompression Error: {e}"
 
-        out_path = input_path.replace(CryptoEngine.ENCRYPTED_EXT, "")
+        out_path = CryptoEngine._derive_output_path(input_path)
         with open(out_path, "wb") as f:
             f.write(plaintext)
 
@@ -587,7 +613,7 @@ class CryptoEngine:
                 else:
                     return False, "Unknown legacy format"
 
-            out_path = input_path.replace(CryptoEngine.ENCRYPTED_EXT, "")
+            out_path = CryptoEngine._derive_output_path(input_path)
             with open(out_path, "wb") as f:
                 f.write(plaintext)
             return True, out_path
@@ -736,7 +762,7 @@ class CryptoEngine:
     ):
         mode_map = {
             "standard": "chacha20-poly1305",
-            "siv": "aes-256-gcm",
+            "siv": "aes-256-siv",
             "blowfish": "aes-256-gcm",
             "cast": "aes-256-gcm",
             "pqc": "pqc-hybrid",

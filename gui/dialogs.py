@@ -856,6 +856,10 @@ class RecoveryDialog(QDialog):
         btn_row.addWidget(btn_save)
         layout.addLayout(btn_row)
 
+        self.clipboard_timer = QTimer(self)
+        self.clipboard_timer.setSingleShot(True)
+        self.clipboard_timer.timeout.connect(self._clear_clipboard)
+
     def _sync_threshold(self):
         if self.spin_threshold.value() > self.spin_shares.value():
             self.spin_threshold.setValue(self.spin_shares.value())
@@ -879,6 +883,7 @@ class RecoveryDialog(QDialog):
             return
         QApplication.clipboard().setText(text)
         QMessageBox.information(self, "Copied", "Shares copied to clipboard.")
+        self.clipboard_timer.start(15000)
 
     def save_shares(self):
         text = self.out_shares.toPlainText().strip()
@@ -889,6 +894,9 @@ class RecoveryDialog(QDialog):
             return
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
+
+    def _clear_clipboard(self):
+        QApplication.clipboard().clear()
 
 
 class FolderWatcherDialog(QDialog):

@@ -84,13 +84,38 @@ class FolderWatcher(QObject):
                             if os.path.exists(entry.path + CryptoEngine.ENCRYPTED_EXT):
                                 continue
 
-                            stat = entry.stat()
-                            last_seen = self._seen.get(entry.path)
-                            if last_seen and last_seen >= stat.st_mtime:
+                            if entry.is_symlink():
                                 continue
 
-                            self._seen[entry.path] = stat.st_mtime
+                            stat = entry.stat()
+                            if hasattr(stat, "st_nlink") and stat.st_nlink > 1:
+                                continue
+
+                            now = time.time()
+                            if now - stat.st_mtime < 2:
+                                self._seen[entry.path] = {
+                                    "mtime": stat.st_mtime,
+                                    "size": stat.st_size,
+                                    "stable": 0,
+                                }
+                                continue
+
+                            last_seen = self._seen.get(entry.path)
+                            if last_seen and last_seen["mtime"] == stat.st_mtime and last_seen["size"] == stat.st_size:
+                                last_seen["stable"] += 1
+                            else:
+                                self._seen[entry.path] = {
+                                    "mtime": stat.st_mtime,
+                                    "size": stat.st_size,
+                                    "stable": 0,
+                                }
+                                continue
+
+                            if last_seen["stable"] < 1:
+                                continue
+
                             self.process_file(entry.path)
+                            self._seen.pop(entry.path, None)
                 except Exception as e:
                     print(f"Watcher error: {e}")
 
